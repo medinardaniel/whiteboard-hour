@@ -13,7 +13,7 @@
 
 ::: phase 1 | Clarify | 0 to 6 min
 
-**Leave with:** 5 to 7 numbers, 2 invariants, the real bottleneck.
+**Leave with:** 5 to 7 numbers, 2 invariants (rules that must never break, like "never oversell"), and the real bottleneck.
 
 - **Ask:** core action, normal vs spike (how big, how fast, how long), hard limit (seats, ovens, stock), what must never fail, what may degrade, team and time.
 - **Math:** peak reads/s = peak-minute visitors / 60 x calls each. Writes are capped by the hard limit.
@@ -30,13 +30,13 @@
 Browser
 CDN: static site, images
 Load balancer
-API: 2+ stateless instances
+API: 2+ identical copies
 Postgres | Stripe: webhook back | Sweeper job
 ```
 
-- 4 to 6 endpoints. The write gets an idempotency key.
-- 2 or 3 tables, each with a status and unique constraints.
-- Walk the write through its transaction, including failure.
+- 4 to 6 endpoints. The one that writes gets an idempotency key (card 10), so a double tap can't create two orders.
+- 2 or 3 database tables, each with a status column and a uniqueness rule.
+- Walk one order through step by step, including what happens if a step fails.
 
 > "At N writes a second, this fits on one database."
 
@@ -48,7 +48,7 @@ Postgres | Stripe: webhook back | Sweeper job
 
 > "X over Y, because Z at these numbers. I'd revisit if W."
 
-- Postgres over DynamoDB · conditional UPDATE over a Redis counter · hold, then charge · hosted checkout over a card form · one service over microservices · managed queue over Kafka · managed containers over Kubernetes.
+- Postgres over DynamoDB (card 4) · conditional update over a Redis counter (8) · hold, then charge (9) · hosted checkout over your own card form (17) · one service over microservices (3) · a simple queue over Kafka (6) · managed containers over Kubernetes (3).
 
 :::
 
@@ -56,14 +56,14 @@ Postgres | Stripe: webhook back | Sweeper job
 
 **Leave with:** a cheapest-first list and "what breaks first".
 
-1. CDN for static content
-2. Short cache (1 to 5 s) on reads
-3. Waiting room, behind a flag
-4. Rate limits per IP and per user
-5. Atomic decrement or expiring holds: **no oversell**
-6. Idempotency keys: **no double charge**
-7. Queue for non-urgent work
-8. Connection pooler and third-party limits
+1. CDN for static files (card 1)
+2. Cache reads for 1 to 5 s (card 11)
+3. Waiting room, behind a flag (card 13)
+4. Rate limits per IP and per user (card 12)
+5. Conditional update and expiring holds: **no oversell** (cards 8, 9)
+6. Idempotency keys: **no double charge** (card 10)
+7. Queue for work that can wait (card 6)
+8. Connection pooler and provider limits (cards 15, 17)
 
 :::
 
@@ -71,13 +71,13 @@ Postgres | Stripe: webhook back | Sweeper job
 
 **Leave with:** a checklist you could run on launch day.
 
-1. Load test at 2 to 3x peak, with a pass bar
-2. Pre-scale an hour early (autoscaling is too slow)
-3. Kill switches, each one tested
-4. Canary, then code freeze before the event
-5. Dashboards: errors, p95, queue depth, held vs paid
-6. Runbook, on-call, and a game day
-7. Raise third-party rate limits ahead of time
+1. Load test at 2 to 3x peak, with a pass bar (card 20)
+2. Pre-scale an hour early; autoscaling is too slow (card 16)
+3. Kill switches, each one tested (card 19)
+4. Canary release, then a code freeze before the event (card 21)
+5. Dashboards: errors, p95 latency, queue length, held vs paid (card 22)
+6. Runbook, on-call person, and a game day rehearsal (cards 20, 22)
+7. Ask providers like Stripe to raise rate limits ahead of time (card 17)
 
 > "If errors pass 2% for 2 minutes, I turn on the waiting room."
 
