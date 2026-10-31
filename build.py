@@ -278,6 +278,18 @@ h1 { font-size: 18pt; } h2 { font-size: 14pt; break-after: avoid; } h3, h4 { bre
 details.answer > summary { display: none; }
 .answer-body { border: 0; padding: 0; margin: 0; background: none; }
 .answer-label { font-size: 9pt; text-transform: uppercase; letter-spacing: .08em; color: var(--accent); border-top: 1.5px solid var(--accent); padding-top: .3rem; margin-top: 1rem; }
+#part-index { columns: 2; column-gap: .25in; font-size: 9pt; }
+#part-index h1, #part-index .part-label, #part-index .tl, #part-index h1 + p { column-span: all; }
+#part-index .phase, #part-index .cards, #part-index .chips { break-inside: avoid; }
+#part-index .phase { padding: .35rem .6rem .15rem; margin: 0 0 .4rem; }
+#part-index h2 { font-size: 11pt; margin: .6rem 0 .3rem; }
+#part-index .cards { grid-template-columns: 1fr; }
+#part-index .flow .box { padding: .1rem .3rem; font-size: 8pt; }
+#part-index .flow .fi { width: 14px; height: 14px; }
+#part-index .flow .box .detail { display: inline; margin-left: .3rem; }
+#part-index .chips li { padding: .1rem .5rem; font-size: 8.5pt; }
+.vis { padding: .1rem; margin: .2rem 0 .3rem; }
+.vis svg.v { max-height: 1.5in; width: auto; max-width: 100% !important; }
 .cover { height: 9in; display: flex; flex-direction: column; justify-content: center; }
 .cover h1 { font-size: 30pt; margin: 0 0 .5rem; }
 .cover ol { font-size: 12pt; }
