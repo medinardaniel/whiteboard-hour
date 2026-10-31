@@ -1,0 +1,125 @@
+{
+ "target": "index.html",
+ "viewport": [
+  1920,
+  1080
+ ],
+ "voice": "en-US-AndrewMultilingualNeural",
+ "rate": "+6%",
+ "pronounce": {
+  "TTL": "T T L",
+  "Redis": "reddis",
+  "API": "A P I"
+ },
+ "load_ms": 1200,
+ "gap_ms": 400,
+ "tail_ms": 1500,
+ "cues": [
+  {
+   "say": "Component eleven: the cache with a short TTL.",
+   "post_ms": 900
+  },
+  {
+   "say": "A cache is a small, very fast memory, usually Redis, that holds recent answers so you don't have to look them up again. The TTL, or time to live, is how long a copy is kept before it's fetched fresh.",
+   "post_ms": 1100,
+   "do": "js:setTimeout(SD, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "It's fast. One Redis server handles about a hundred thousand reads a second, each in under a millisecond.",
+   "post_ms": 1100,
+   "do": "js:setTimeout(SD2, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "Why do you need it? Game day at a pizza shop. Twenty thousand fans keep refreshing slots left. That's about five hundred requests a second.",
+   "post_ms": 700,
+   "do": "js:setTimeout(S1, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "Each one runs the same database query, for the same answer. Five hundred identical queries a second, and checkout slows down too.",
+   "post_ms": 1200,
+   "do": "js:setTimeout(S1b, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "So put a cache in between. The first request finds it empty. That's a cache miss. The API reads the database once, and saves the answer with a two-second TTL.",
+   "post_ms": 900,
+   "do": "js:setTimeout(S2, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "For the next two seconds, every request is a cache hit, answered from Redis in under a millisecond. The database sees none of them.",
+   "post_ms": 900,
+   "do": "js:setTimeout(S3, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "When the TTL runs out, the copy is gone. The next request misses and refreshes it, and the cycle repeats.",
+   "post_ms": 1200,
+   "do": "js:setTimeout(S4, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "But what if the cache says three left, and they're already gone? That's fine. It's a hint. Checkout asks the database, and the conditional update says sold out.",
+   "post_ms": 1200,
+   "do": "js:setTimeout(S5, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "So what belongs in it? Things read often, where a few seconds old is fine: slots left, the menu, the catalog.",
+   "post_ms": 700,
+   "do": "js:setTimeout(S6, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "The checkout decision and payment status always come from the database.",
+   "post_ms": 1200,
+   "do": "js:setTimeout(S6b, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "Now the numbers. Without a cache, the database answers five hundred reads a second.",
+   "post_ms": 700,
+   "do": "js:setTimeout(S7, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "With a two-second TTL, it's one read every two seconds. That's a thousand times fewer.",
+   "post_ms": 1200,
+   "do": "js:setTimeout(S7b, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "Here's where it sits: beside the API. Reads check Redis first.",
+   "post_ms": 700,
+   "do": "js:setTimeout(S8, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "Anything that decides, like checkout, goes straight to Postgres.",
+   "post_ms": 1200,
+   "do": "js:setTimeout(S8b, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "Two things to know. A stampede: a hot copy expires, and thousands of requests hit the database at once. Let just one of them refresh it.",
+   "post_ms": 700,
+   "do": "js:setTimeout(S9, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "And invalidation, deleting copies on every change, is harder than it sounds. A short TTL is simpler.",
+   "post_ms": 1200,
+   "do": "js:setTimeout(S9b, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "In the interview, say: cached for two seconds. It's a hint; the database is the truth.",
+   "post_ms": 600,
+   "do": "js:setTimeout(S10, 0)",
+   "settle_ms": 350
+  }
+ ]
+}

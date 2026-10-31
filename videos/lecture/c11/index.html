@@ -1,0 +1,192 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="color-scheme" content="light">
+<title>Cache with a short TTL: lecture</title>
+<link rel="stylesheet" href="../lib/lecture.css">
+<script src="../lib/icons.js"></script>
+<script src="../lib/lecture.js"></script>
+<style>
+#scen .bar:not([style*="height"]) .v { opacity:0; }
+.note { position:absolute; font-size:40px; font-weight:700; text-align:center; opacity:0; transition: opacity .6s; }
+.note.on { opacity:1; }
+</style>
+</head>
+<body>
+<script>
+// a countdown ring we can stop early (lib ring() can't be cancelled)
+function Ring(d, key, ms, color = '#bf8700') {
+  const n = d.N[key], R = Math.max(n.w, n.h) / 2 + 22, C = 2 * Math.PI * R;
+  const c = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+  Object.entries({ cx: n.x, cy: n.y, r: R, fill: 'none', stroke: color, 'stroke-width': 10, 'stroke-dasharray': C, transform: `rotate(-90 ${n.x} ${n.y})` })
+    .forEach(([k, v]) => c.setAttribute(k, v));
+  d.fx.append(c);
+  const a = c.animate([{ strokeDashoffset: 0 }, { strokeDashoffset: C }], { duration: ms, fill: 'forwards', easing: 'linear' });
+  return { stop: () => { a.pause(); c.remove(); }, done: a.finished.then(() => c.remove()) };
+}
+const stops = [];
+let gen = 0;
+const stopAll = () => { gen++; while (stops.length) stops.pop()(); };
+
+Title({ num: 11, name: 'Cache with a short TTL', sub: 'A sticky note, rewritten every 2 seconds', phase: 'Survive the spike', pills: ['Slots left', 'Menu', 'Catalog'] });
+
+// ---- definition
+const D = Define('def', {
+  html: 'A <b>small, very fast memory</b> (usually Redis) holding <b>recent answers</b>. The <b>TTL</b>, time to live, is how long a copy lives before it\'s fetched again.',
+  extra: { label: 'One Redis server:', pills: ['~100,000 reads a second', 'under 1 ms each'] },
+});
+const dd = D.d;
+dd.node('api', 160, 540, 'server', 'API', '', { w: 160 });
+dd.node('cache', 520, 300, 'bolt', 'Cache', 'Redis', { w: 190, hidden: true });
+dd.node('db', 520, 800, 'db', 'Database', '', { w: 190 });
+dd.link('api', 'cache'); dd.link('api', 'db'); dd.link('db', 'cache', { dash: 1 });
+const defTTL = dd.text(800, 310, '', { size: 34, color: 'warn' });
+window.SD = async () => {
+  D.show(); await sleep(600); dd.pop('cache');
+  await sleep(1200);
+  await dd.send('api', 'cache', { dur: 600, label: 'slots?' });
+  dd.tag('cache', 'miss', 'warn');
+  await dd.send('api', 'db', { dur: 600 });
+  await dd.send('db', 'cache', { dur: 700, label: 'save copy', color: 'good' });
+  dd.badge('cache', '3 left', 'good');
+  defTTL.textContent = 'TTL 2 s';
+  Ring(dd, 'cache', 2600);
+  const s = dd.stream('api', 'cache', { every: 350, dur: 500, color: 'good' }); stops.push(s);
+  setTimeout(s, 7000);
+};
+window.SD2 = () => D.more();
+
+// ---- the problem: identical queries
+const P = Stage('prob', { caption: ['The problem', 'Game day: 20,000 people refresh "slots left"'] });
+P.node('u', 300, 560, 'users', '20,000 fans', '', { w: 210 });
+P.node('api', 900, 560, 'server', 'API', '', { w: 180 });
+P.node('db', 1500, 560, 'db', 'Database', 'same query, again', { w: 240 });
+P.link('u', 'api'); P.link('api', 'db');
+const pRate = P.text(600, 420, '', { size: 40, color: 'bad' });
+window.S1 = async () => {
+  stopAll(); P.show(); P.meter('db', .15);
+  stops.push(P.stream('u', 'api', { every: 90, dur: 600 }));
+  await sleep(500);
+  pRate.textContent = '~500 requests a second';
+};
+window.S1b = async () => {
+  stops.push(P.stream('api', 'db', { every: 90, dur: 600, label: '', onSend: () => P.bump('db', .02) }));
+  await sleep(2200);
+  P.tone('db', 'bad'); P.rename('db', null, '500 identical queries/s');
+  P.badge('db', 'slow for checkout too', 'bad', 'top');
+};
+
+// ---- how it works
+const M = Stage('how', { caption: ['Put a cache in between', 'Ask the cache first'] });
+M.node('u', 200, 560, 'users', 'Fans', '', { w: 180 });
+M.node('api', 640, 560, 'server', 'API', '', { w: 180 });
+M.node('cache', 1120, 330, 'bolt', 'Cache', 'Redis', { w: 220 });
+M.node('db', 1120, 820, 'db', 'Database', 'the truth', { w: 220 });
+M.link('u', 'api'); M.link('api', 'cache'); M.link('api', 'db'); M.link('db', 'cache', { dash: 1 });
+const hitsT = M.text(1600, 320, 'cache hits: 0', { size: 40, color: 'good' });
+const dbT = M.text(1600, 830, 'database reads: 0', { size: 40, color: 'acc' });
+const ttlT = M.text(1120, 140 + 0, '', { size: 32, color: 'warn' });
+let hits = 0, dbq = 0, ring = null;
+const setHits = () => { hitsT.textContent = 'cache hits: ' + hits.toLocaleString(); };
+const setDb = () => { dbT.textContent = 'database reads: ' + dbq; };
+async function miss() {
+  const g = gen;
+  await M.send('api', 'cache', { dur: 500, label: 'miss', color: 'warn' });
+  if (g !== gen) return;
+  await M.send('api', 'db', { dur: 500 });
+  if (g !== gen) return;
+  dbq++; setDb();
+  await M.send('db', 'cache', { dur: 600, color: 'good', label: 'save, TTL 2 s' });
+  if (g !== gen) return;
+  M.badge('cache', 'slots: 3 left', 'good', 'bottom');
+  ttlT.textContent = 'TTL 2 s';
+  ring = Ring(M, 'cache', 2000);
+}
+window.S2 = async () => {
+  stopAll(); M.show(); await sleep(700);
+  await M.send('u', 'api', { dur: 500 });
+  M.cap('Cache miss', 'Empty, so read the database once and save it');
+  await miss();
+};
+window.S3 = async () => {
+  M.cap('Cache hits', 'Everyone else gets the copy, under 1 ms');
+  if (ring) ring.stop(); ring = Ring(M, 'cache', 4200);
+  stops.push(M.stream('u', 'api', { every: 110, dur: 500 }));
+  stops.push(M.stream('api', 'cache', { every: 110, dur: 450, color: 'good', onSend: () => { hits += 5; setHits(); } }));
+};
+window.S4 = async () => {
+  M.cap('TTL runs out', 'One miss refreshes it; the cycle repeats');
+  await sleep(300);
+  if (ring) ring.stop(); M.unbadge('cache'); ttlT.textContent = 'expired'; M.tone('cache', 'warn');
+  await sleep(500); M.tone('cache', '');
+  await miss();
+  const g = gen;
+  const id = setInterval(async () => { if (g !== gen) return; M.unbadge('cache'); ttlT.textContent = 'expired'; await miss(); }, 3600);
+  stops.push(() => clearInterval(id));
+};
+window.S5 = async () => {
+  stopAll(); if (ring) ring.stop(); ttlT.textContent = '';
+  M.cap('Stale? Fine. It\'s a hint', 'Checkout asks the database, not the cache');
+  M.badge('cache', 'still says: 3 left', 'warn', 'bottom'); M.rename('db', null, 'left = 0');
+  await sleep(600);
+  await M.send('u', 'api', { dur: 600, label: 'checkout' });
+  await M.send('api', 'db', { dur: 700, label: 'UPDATE ... left >= 1' });
+  await M.send('db', 'api', { dur: 600, color: 'bad', label: '0 rows' });
+  await M.send('api', 'u', { dur: 600, color: 'bad' });
+  M.badge('u', 'sold out', 'bad');
+};
+
+// ---- what it's for
+const U = Sort('uses', {
+  head: 'Read often, and a little old is fine? Cache it', left: '✓ Cache it', right: '→ Ask the database', items: [
+    ['Slots left <i>2 s</i>', 'l'], ['Menu', 'l'], ['Product catalog', 'l'], ['Store hours', 'l'],
+    ['Checkout', 'r'], ['Payment status', 'r'],
+  ],
+});
+window.S6 = () => { stopAll(); U.show(); U.left(550); };
+window.S6b = () => U.right(600);
+
+// ---- scenario with numbers
+const B = Bars('scen', {
+  head: 'Game day: database reads for "slots left"', max: 520, charts: [
+    { title: 'No cache', bars: [{ label: 'reads a second', value: 500, text: '500', color: 'bad', over: true }] },
+    { title: 'Cache, TTL 2 s', bars: [{ label: 'reads a second', value: .5, text: '0.5', color: 'good' }] },
+  ],
+});
+const bNote = document.createElement('div'); bNote.className = 'note';
+bNote.style.cssText += 'left:1050px;width:760px;top:520px;color:var(--good)';
+bNote.innerHTML = '1 read every 2 seconds:<br>a thousand times fewer';
+document.getElementById('scen').append(bNote);
+window.S7 = async () => { B.show(); await sleep(400); B.grow(0); };
+window.S7b = async () => { B.grow(1); await sleep(900); bNote.classList.add('on'); };
+
+// ---- where it fits
+const Y = System('sys', { highlight: ['api', 'cache', 'db'] });
+window.S8 = async () => {
+  Y.show(); await sleep(600);
+  await Y.flow(['browser', 'cdn', 'lb', 'api'], { dur: 420 });
+  await Y.send('api', 'cache', { dur: 500, color: 'good', label: 'hit' });
+  Y.badge('cache', 'slots, 2 s', 'good');
+};
+window.S8b = async () => {
+  Y.cap('Beside the API', 'Reads check the cache; checkout goes to Postgres');
+  await Y.send('api', 'db', { dur: 600, label: 'checkout' });
+  Y.badge('db', 'decides', 'acc');
+};
+
+// ---- trade-offs
+const T = Cards('trade', {
+  head: 'Two things to know', cols: 2, items: [
+    { icon: 'bolt', color: 'warn', title: 'Stampede', text: 'A hot copy expires and thousands hit the database at once. Let one request refresh it.' },
+    { icon: 'x', color: 'bad', title: 'Invalidation is hard', text: 'Deleting copies on every change is harder than a short TTL.' },
+  ],
+});
+window.S9 = () => { T.show(); setTimeout(() => T.reveal(0), 300); };
+window.S9b = () => T.reveal(1);
+
+const Z = Say('say', 'Cached for 2 seconds. It\'s a hint; the database is the truth.');
+window.S10 = () => Z.show();
+</script>
+</body>
+</html>

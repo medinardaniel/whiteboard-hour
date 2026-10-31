@@ -1,0 +1,173 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="color-scheme" content="light">
+<title>Rate limits: lecture</title>
+<link rel="stylesheet" href="../lib/lecture.css">
+<script src="../lib/icons.js"></script>
+<script src="../lib/lecture.js"></script>
+<style>
+/* keep the page repainting so the screen recorder never freezes on a half-finished fade */
+@keyframes tick { to { transform: translateX(1px); } }
+#tick { position:absolute; right:0; bottom:0; width:2px; height:2px; background:var(--bg); animation: tick .5s steps(2) infinite alternate; }
+</style>
+</head>
+<body>
+<div id="tick"></div>
+<script>
+const stops = [];
+let gen = 0;
+const stopAll = () => { gen++; while (stops.length) stops.pop()(); };
+// draw a token bucket: lib fill() turns a FULL queue red (it's meant for queues), so color the cells ourselves
+function tokens(d, key, n) {
+  const q = d.N[key];
+  q.cells.forEach((c, i) => c.setAttribute('fill', i < n ? (n <= 2 ? '#cf222e' : '#1a7f37') : '#e3e0d8'));
+}
+
+Title({ num: 12, name: 'Rate limits', sub: 'A bouncer for your API', phase: 'Survive the spike', pills: ['Bots', 'Retry storms', 'Provider limits'] });
+
+// ---- definition
+const D = Define('def', {
+  html: 'A <b>cap on how often</b> one person or machine can call you. Extra requests get an <b>instant "slow down" error</b>, before they cost you anything.',
+  extra: { label: 'Usually switched on, not built:', pills: ['Cloudflare', 'AWS WAF', '429 Too Many Requests'] },
+});
+const dd = D.d;
+dd.node('c', 150, 540, 'user', 'One caller', '', { w: 170 });
+dd.node('g', 470, 540, 'gauge', 'Limit', '10 a second', { w: 180, hidden: true });
+dd.node('s', 800, 540, 'server', 'Your API', '', { w: 180 });
+dd.link('c', 'g'); dd.link('g', 's');
+const defCount = dd.text(470, 380, '', { size: 34, color: 'acc' });
+window.SD = async () => {
+  D.show(); await sleep(500); dd.pop('g'); await sleep(900);
+  let n = 0; const g0 = gen;
+  const id = setInterval(async () => {
+    if (g0 !== gen) return clearInterval(id);
+    const k = ++n; await dd.send('c', 'g', { dur: 500 });
+    if (k <= 10) { defCount.textContent = `${k} of 10 this second`; dd.send('g', 's', { dur: 500, color: 'good' }); }
+    else { defCount.textContent = 'over the cap'; dd.send('g', 'c', { dur: 500, color: 'bad', label: k % 2 ? '429' : '' }); }
+    if (k > 26) clearInterval(id);
+  }, 230);
+};
+window.SD2 = () => D.more();
+
+// ---- the problem
+const P = Stage('prob', { caption: ['The problem', 'An electronics sale opens'] });
+P.node('cu', 260, 330, 'users', 'Real customers', '', { w: 230 });
+P.node('app', 260, 600, 'phone', 'Buggy app', 'retries in a loop', { w: 230, hidden: true });
+P.node('bot', 260, 860, 'gear', 'Reseller script', '300 a second, 1 IP', { w: 250 });
+P.node('api', 1000, 600, 'server', 'API', '', { w: 190 });
+P.node('st', 1620, 600, 'box', 'TVs in stock', '', { w: 230 });
+P.link('cu', 'api'); P.link('bot', 'api'); P.link('api', 'st');
+const stockT = P.text(1620, 760, '50 left', { size: 52 });
+window.S1 = async () => {
+  stopAll(); P.show(); P.meter('api', .2);
+  stops.push(P.stream('cu', 'api', { every: 900, dur: 900, color: 'good' }));
+  stops.push(P.stream('bot', 'api', { every: 120, dur: 800, color: 'bad', onSend: () => P.bump('api', .016) }));
+};
+window.S1b = async () => {
+  const g0 = gen;
+  for (let left = 50; left >= 0 && g0 === gen; left -= 2) { stockT.textContent = left + ' left'; if (left % 4 === 0) P.send('api', 'st', { dur: 400, color: 'bad', r: 8 }); await sleep(110); }
+  if (g0 !== gen) return;
+  stockT.textContent = '0 left'; P.tone('st', 'bad');
+  P.badge('st', 'all to the script', 'bad');
+  P.badge('cu', 'sold out?!', 'bad');
+};
+window.S1c = async () => {
+  P.cap('Not always on purpose', 'A retry loop turns a hiccup into an outage');
+  P.link('app', 'api'); P.pop('app');
+  await sleep(500);
+  stops.push(P.stream('app', 'api', { every: 130, dur: 700, color: 'warn', onSend: () => P.bump('api', .01) }));
+  await sleep(1800);
+  P.tone('api', 'bad'); P.rename('api', 'API', 'down'); P.badge('api', 'outage', 'bad');
+};
+
+// ---- how it works: a token bucket per IP
+const M = Stage('how', { caption: ['A token bucket per IP', '10 tokens, refilled at 10 a second'] });
+M.node('cu', 230, 330, 'user', 'Customer', 'IP 1', { w: 200 });
+M.node('bot', 230, 800, 'gear', 'Script', 'IP 2', { w: 200 });
+M.node('g', 900, 560, 'gauge', 'Rate limiter', 'at the edge', { w: 230 });
+M.node('srv', 1620, 560, 'server', 'Your servers', '', { w: 230 });
+M.link('cu', 'g'); M.link('bot', 'g'); M.link('g', 'srv');
+M.queue('qc', 900, 300, 10, 'IP 1 tokens');
+M.queue('qb', 900, 830, 10, 'IP 2 tokens');
+const tk = { qc: 10, qb: 10 };
+tokens(M, 'qc', 10); tokens(M, 'qb', 10);
+const rej = M.text(560, 980, '', { size: 36, color: 'bad' });
+let rejected = 0;
+async function hit(from, q, color) {
+  await M.send(from, 'g', { dur: 450, color });
+  if (tk[q] > 0) { tk[q]--; tokens(M, q, tk[q]); M.send('g', 'srv', { dur: 600, color: 'good' }); }
+  else { rejected++; rej.textContent = `rejected: ${rejected}, servers never saw them`; M.send('g', from, { dur: 500, color: 'bad', label: rejected % 3 === 1 ? '429' : '' }); }
+}
+function refill() {
+  const id = setInterval(() => { for (const q of ['qc', 'qb']) if (tk[q] < 10) { tk[q]++; tokens(M, q, tk[q]); } }, 900);
+  return () => clearInterval(id);
+}
+window.S2 = async () => {
+  stopAll(); M.show(); await sleep(800);
+  M.cap('A token bucket per IP', 'Each request spends 1 token. 10 tokens, refilled at 10 a second');
+  await hit('cu', 'qc'); await sleep(300); await hit('cu', 'qc');
+  stops.push(refill());
+};
+window.S3 = async () => {
+  M.cap('A normal customer', 'Spends a few; the bucket refills');
+  const id = setInterval(() => hit('cu', 'qc'), 1300); stops.push(() => clearInterval(id));
+  M.badge('cu', 'never notices', 'good');
+};
+window.S4 = async () => {
+  M.cap('The script', 'Empties its bucket in a blink, then gets 429');
+  M.tone('bot', 'bad');
+  const id = setInterval(() => hit('bot', 'qb', 'bad'), 170); stops.push(() => clearInterval(id));
+};
+window.S4b = () => { M.cap('429: Too Many Requests', 'A good client waits, then tries again'); M.badge('srv', 'calm', 'good'); };
+
+// ---- what it's for
+const U = Cards('uses', {
+  head: 'What it protects against', items: [
+    { icon: 'gear', title: 'Bots', text: 'Scripts that flood you or grab stock.' },
+    { icon: 'retry', title: 'Retry storms', text: 'A buggy loop gets 429s, not the database.' },
+    { icon: 'card', title: 'Provider limits', text: 'Stripe allows about 100 requests a second.' },
+  ],
+});
+window.S5 = () => { stopAll(); U.show(); setTimeout(() => U.reveal(0), 300); setTimeout(() => U.reveal(1), 1700); };
+window.S5b = () => U.reveal(2);
+
+// ---- scenario with numbers
+const C = Counters('scen', {
+  head: 'The reseller\'s script, with an edge cap of 10 a second per IP', parts: [
+    { n: 300, label: 'requests a second' }, { op: '−' }, { n: 10, label: 'allowed', cls: 'good' }, { op: '=' },
+    { n: 290, label: 'rejected at the edge', cls: 'res' },
+  ],
+});
+window.S6 = async () => { C.show(); await sleep(400); C.run(600, 250); };
+window.S6b = () => C.note('Switches IPs? The API also caps <b style="color:var(--fg)">2 orders per phone number</b>.');
+
+// ---- where it fits
+const Y = System('sys', { highlight: ['cdn', 'api'], labels: { cdn: ['CDN + WAF', 'per IP cap'], api: ['API', '2 orders per phone'] } });
+window.S7 = async () => {
+  Y.show(); await sleep(600);
+  for (let i = 0; i < 3; i++) { await Y.send('browser', 'cdn', { dur: 400, color: 'bad' }); Y.send('cdn', 'browser', { dur: 400, color: 'bad', label: i === 0 ? '429' : '' }); }
+  Y.badge('cdn', 'first line', 'acc');
+};
+window.S7b = async () => {
+  Y.cap('Two layers', 'Per IP at the edge; per customer in the API');
+  await Y.flow(['browser', 'cdn', 'lb', 'api'], { dur: 420, color: 'good' });
+  Y.badge('api', 'business cap', 'acc');
+};
+
+// ---- trade-offs
+const T = Cards('trade', {
+  head: 'Two things to know', cols: 2, items: [
+    { icon: 'users', color: 'warn', title: 'Shared IPs', text: 'An office or a mobile carrier can put many real people behind one IP. Leave room.' },
+    { icon: 'x', color: 'bad', title: 'Per IP alone is easy to dodge', text: 'Scripts rotate IPs. The per-customer cap catches that.' },
+  ],
+});
+window.S8 = () => { T.show(); setTimeout(() => T.reveal(0), 300); };
+window.S8b = () => T.reveal(1);
+
+const Z = Say('say', 'Per IP at the edge, and 2 orders per phone in the API.');
+window.S9 = () => Z.show();
+</script>
+</body>
+</html>

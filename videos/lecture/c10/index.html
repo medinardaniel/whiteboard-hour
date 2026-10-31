@@ -1,0 +1,199 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="color-scheme" content="light">
+<title>Idempotency key: lecture</title>
+<link rel="stylesheet" href="../lib/lecture.css">
+<script src="../lib/icons.js"></script>
+<script src="../lib/lecture.js"></script>
+<style>
+.tbl { position:absolute; background:var(--card); border:3px solid var(--line); border-radius:20px; padding:18px 26px 22px; z-index:3;
+  opacity:0; transform:translateY(16px); transition: all .5s; }
+.tbl.on { opacity:1; transform:none; }
+.tbl h3 { margin:0 0 10px; font-size:32px; }
+.tbl h3 small { font-size:24px; color:var(--muted); font-weight:600; margin-left:10px; }
+.tbl table { border-collapse:collapse; width:100%; font-size:32px; }
+.tbl th { text-align:left; color:var(--muted); font-size:24px; font-weight:700; padding:6px 12px; border-bottom:3px solid var(--line); }
+.tbl td { padding:10px 12px; font-family: Consolas, "Cascadia Mono", monospace; border-bottom:2px solid var(--line); transition: background .4s; }
+.tbl tr.new td { animation: rowin .6s ease-out; }
+.tbl tr.flash td { background:#e6f4ea; }
+.tbl tr.bad td { background:#fdecee; }
+@keyframes rowin { from { opacity:0; transform:translateX(30px); } to { opacity:1; transform:none; } }
+.band { fill:#e9ebef; }
+.band-l { font-size:26px; fill:#9aa0a6; font-weight:700; letter-spacing:.08em; text-anchor:middle; }
+</style>
+</head>
+<body>
+<script>
+// a small database table drawn in HTML inside a scene
+function Table(sceneId, { x, y, w, title, sub, cols }) {
+  const s = document.getElementById(sceneId);
+  const b = document.createElement('div'); b.className = 'tbl';
+  b.style.left = x + 'px'; b.style.top = y + 'px'; b.style.width = w + 'px';
+  b.innerHTML = `<h3>${title}${sub ? `<small>${sub}</small>` : ''}</h3><table><tr>${cols.map(c => `<th>${c}</th>`).join('')}</tr></table>`;
+  s.append(b);
+  const t = b.querySelector('table'), rows = [];
+  return {
+    on: () => b.classList.add('on'),
+    add: (cells, cls = '') => { const r = t.insertRow(); r.className = 'new ' + cls; cells.forEach(c => { r.insertCell().innerHTML = c; }); rows.push(r); return r; },
+    mark: (i, cls) => { rows.forEach(r => r.classList.remove('flash', 'bad')); if (i != null) rows[i].classList.add(cls || 'flash'); },
+  };
+}
+// a gray band with a label, e.g. a train tunnel
+function band(d, x, y, w, h, label) {
+  const r = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+  Object.entries({ x, y, width: w, height: h, rx: 30, class: 'band' }).forEach(([k, v]) => r.setAttribute(k, v)); d.bg.append(r);
+  const t = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+  Object.entries({ x: x + w / 2, y: y + 44, class: 'band-l' }).forEach(([k, v]) => t.setAttribute(k, v)); t.textContent = label; d.bg.append(t);
+}
+
+Title({ num: 10, name: 'Idempotency key', sub: 'Show the ticket twice, get served once', phase: 'Protect the invariants', pills: ['No double charge', 'Every create or charge', 'Every webhook'] });
+
+// ---- definition
+const D = Define('def', {
+  html: 'A <b>random id</b> the app attaches to each user action. The server saves it with a <b>uniqueness rule</b>; if it arrives again, it <b>returns the first result</b> instead of repeating.',
+  extra: { label: 'Idempotent: doing it twice has the same effect as once.', pills: ['Stripe accepts one', 'Idempotency-Key header'] },
+});
+const dd = D.d;
+dd.node('app', 180, 360, 'phone', 'App', '', { w: 160 });
+dd.node('srv', 640, 360, 'server', 'Server', '', { w: 180 });
+dd.node('res', 640, 760, 'doc', 'Order #1001', 'saved with key a7f3', { w: 300, hidden: true });
+dd.link('app', 'srv'); dd.link('srv', 'res');
+window.SD = async () => {
+  D.show(); await sleep(1000);
+  await dd.send('app', 'srv', { label: 'key a7f3', dur: 1000 });
+  dd.pop('res'); dd.badge('res', 'created', 'good', 'bottom');
+  await sleep(2400);
+  await dd.send('app', 'srv', { label: 'key a7f3 again', dur: 1000, color: 'warn' });
+  dd.badge('srv', 'seen it', 'warn');
+  await dd.send('srv', 'app', { label: '#1001', dur: 1000, color: 'good' });
+  dd.badge('app', 'same order', 'good');
+};
+window.SD2 = () => D.more();
+
+// ---- the problem: lost reply, retry, double charge
+const P = Stage('prob', { caption: ['The problem', 'A customer on a train taps "Place order"'] });
+band(P, 450, 380, 220, 360, 'TUNNEL');
+P.node('app', 220, 560, 'phone', 'Phone', '', { w: 170 });
+P.node('tun', 560, 560, '', '', '', { hidden: true });
+P.node('srv', 960, 560, 'server', 'Server', '', { w: 190 });
+P.node('db', 1560, 340, 'db', 'Orders', '0 orders', { w: 220 });
+P.node('pay', 1560, 800, 'card', 'Stripe', '0 charges', { w: 220 });
+P.link('app', 'srv'); P.link('srv', 'db'); P.link('srv', 'pay');
+window.S1 = async () => {
+  P.show(); await sleep(700);
+  await P.send('app', 'srv', { label: 'place order', dur: 900 });
+  await Promise.all([P.send('srv', 'db', { dur: 700 }), P.send('srv', 'pay', { dur: 700 })]);
+  P.rename('db', null, 'order #1001'); P.rename('pay', null, '1 charge'); P.tone('db', 'good'); P.tone('pay', 'good');
+};
+window.S1b = async () => {
+  P.cap('The reply is lost', 'The order exists, but the phone never hears back');
+  await P.send('srv', 'tun', { label: 'done: #1001', dur: 1000, color: 'good' });
+  P.tag('tun', 'lost', 'bad', -40);
+  P.badge('app', 'no answer...', 'warn');
+};
+window.S1c = async () => {
+  P.cap('So the app retries', 'The server can\'t tell it\'s a repeat');
+  await P.send('app', 'srv', { label: 'place order', dur: 900, color: 'warn' });
+  await Promise.all([P.send('srv', 'db', { dur: 700, color: 'bad' }), P.send('srv', 'pay', { dur: 700, color: 'bad' })]);
+  P.rename('db', null, '#1001 and #1002'); P.rename('pay', null, '2 charges'); P.tone('db', 'bad'); P.tone('pay', 'bad');
+  P.badge('pay', 'charged twice', 'bad');
+};
+
+// ---- how it works
+const M = Stage('how', { caption: ['The fix: a key per action', 'The app makes it once, and reuses it on every retry'] });
+band(M, 400, 380, 200, 360, 'TUNNEL');
+M.node('app', 200, 560, 'phone', 'Phone', '', { w: 170 });
+M.node('tun', 500, 560, '', '', '', { hidden: true });
+M.node('srv', 860, 560, 'server', 'Server', '', { w: 190 });
+M.node('pay', 860, 920, 'card', 'Stripe', '', { w: 200, hidden: true });
+M.node('db', 1170, 520, '', '', '', { hidden: true });
+M.link('app', 'srv');
+const K = Table('how', { x: 1170, y: 400, w: 650, title: 'idempotency_keys', sub: 'key is UNIQUE', cols: ['key', 'result'] });
+window.S2 = async () => { M.show(); await sleep(900); M.badge('app', 'key a7f3', 'acc'); M.tag('app', 'tap', 'acc', -120); };
+window.S3 = async () => {
+  M.cap('First try', 'Save the key with the result');
+  await M.send('app', 'srv', { label: 'a7f3', dur: 900 });
+  K.on(); await sleep(300);
+  await M.send('srv', 'db', { dur: 500 });
+  K.add(['a7f3', 'order #1001']); K.mark(0);
+  await sleep(1800);
+  K.mark(null);
+};
+window.S3b = async () => {
+  M.cap('Reply lost, retry', 'Same key, a7f3');
+  await M.send('srv', 'tun', { label: '#1001', dur: 900, color: 'good' });
+  M.tag('tun', 'lost', 'bad', -40);
+  await sleep(500);
+  await M.send('app', 'srv', { label: 'a7f3 again', dur: 900, color: 'warn' });
+};
+window.S3c = async () => {
+  M.cap('Seen it: return the first result', 'No new order, no new charge');
+  await M.send('srv', 'db', { dur: 500, color: 'warn' });
+  K.mark(0); M.badge('srv', 'found a7f3', 'good');
+  await M.send('srv', 'app', { label: 'order #1001', dur: 1000, color: 'good' });
+  M.badge('app', 'one order', 'good');
+};
+window.S4 = async () => {
+  M.cap('One more layer', 'The order id is Stripe\'s idempotency key too');
+  M.link('srv', 'pay'); M.pop('pay'); M.unbadge('srv'); M.unbadge('app');
+  await sleep(600);
+  await M.send('srv', 'pay', { label: 'charge, key #1001', dur: 900 });
+  M.badge('pay', '1 charge', 'good', 'bottom');
+  await M.send('srv', 'pay', { label: 'repeat, key #1001', dur: 900, color: 'warn' });
+  M.tag('pay', 'same charge back', 'good', -100);
+};
+
+// ---- what it's for
+const U = Cards('uses', {
+  head: 'Where you need it', items: [
+    { icon: 'doc', title: 'Every create', text: 'Orders, bookings, sign-ups.' },
+    { icon: 'card', title: 'Every charge', text: 'Pass a key to Stripe.' },
+    { icon: 'callback', title: 'Every webhook', text: 'Save Stripe\'s event id. Ignore repeats.' },
+  ],
+});
+window.S5 = () => { U.show(); setTimeout(() => U.reveal(0), 300); setTimeout(() => U.reveal(1), 1500); };
+window.S5b = () => U.reveal(2);
+
+// ---- scenario with numbers
+const C = Counters('scen', {
+  head: 'A print shop\'s app: what retries cost without keys', parts: [
+    { n: 5000, label: 'orders a day' }, { op: '×' }, { static: '2%', label: 'lose the reply, retry' }, { op: '=' },
+    { n: 100, label: 'double charges a day', cls: 'res' },
+  ],
+});
+window.S6 = async () => { C.show(); await sleep(500); C.run(1200, 600); };
+window.S6b = () => C.note('With idempotency keys: <b style="color:var(--good)">0</b>. The retries still happen; they just do no harm.');
+
+// ---- where it fits
+const Y = System('sys', { highlight: ['browser', 'api', 'db', 'pay'] });
+window.S7 = async () => {
+  Y.show(); await sleep(600);
+  Y.badge('browser', 'key a7f3', 'acc');
+  await Y.flow(['browser', 'cdn', 'lb', 'api'], { dur: 450, label: 'a7f3' });
+  await Y.send('api', 'db', { dur: 500 });
+  Y.badge('db', 'key is UNIQUE', 'good');
+};
+window.S7b = async () => {
+  Y.cap('Both directions', 'Our key to Stripe; Stripe\'s event id back to us');
+  await Y.send('api', 'pay', { dur: 700, label: 'key #1001' });
+  await Y.send('pay', 'api', { dur: 700, color: 'good', label: 'event evt_9' });
+  Y.badge('pay', 'deduped', 'good');
+};
+
+// ---- trade-offs
+const T = Cards('trade', {
+  head: 'Two things to know', cols: 2, items: [
+    { icon: 'retry', color: 'warn', title: 'One key per action', text: 'A retry reuses the key. A new tap on a new order gets a new key.' },
+    { icon: 'x', color: 'bad', title: '"Exactly once" isn\'t possible', text: 'You get at least once, with repeats made harmless.' },
+  ],
+});
+window.S8 = () => { T.show(); setTimeout(() => T.reveal(0), 300); };
+window.S8b = () => T.reveal(1);
+
+const Z = Say('say', 'A client key with a unique constraint, the same key passed to Stripe, and webhook event ids deduped.');
+window.S9 = () => Z.show();
+</script>
+</body>
+</html>

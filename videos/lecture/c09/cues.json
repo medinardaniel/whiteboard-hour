@@ -1,0 +1,135 @@
+{
+ "target": "index.html",
+ "viewport": [
+  1920,
+  1080
+ ],
+ "voice": "en-US-AndrewMultilingualNeural",
+ "rate": "+6%",
+ "pronounce": {
+  "API": "A P I"
+ },
+ "load_ms": 1200,
+ "gap_ms": 400,
+ "tail_ms": 1500,
+ "cues": [
+  {
+   "say": "Component nine: holds that expire.",
+   "post_ms": 900
+  },
+  {
+   "say": "A hold is a pattern for selling something you can run out of. You reserve the item first, and take payment second. If the payment doesn't arrive in time, the hold expires, and the item goes back.",
+   "post_ms": 1100,
+   "do": "js:setTimeout(SD, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "Think of a store setting an item aside for ten minutes while you get your wallet.",
+   "post_ms": 1100,
+   "do": "js:setTimeout(SD2, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "Why not just charge first? A customer picks two pizzas for the six o'clock slot, and pays.",
+   "post_ms": 700,
+   "do": "js:setTimeout(S1, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "Meanwhile, other orders filled the slot. Now you've taken money for pizza you can't make. That's a refund, and an angry customer.",
+   "post_ms": 1200,
+   "do": "js:setTimeout(S1b, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "So flip the order. Step one: reserve. Two of the slot's hundred and fifty pizzas are held, and the hold expires in ten minutes.",
+   "post_ms": 1000,
+   "do": "js:setTimeout(S2, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "Step two: the customer pays on Stripe's page. Stripe sends your server a webhook, a message saying the payment went through. The hold flips to paid, and the kitchen gets the order.",
+   "post_ms": 1100,
+   "do": "js:setTimeout(S3, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "But say another customer walks away. Ten minutes pass with no payment.",
+   "post_ms": 700,
+   "do": "js:setTimeout(S4, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "A sweeper, a small job that runs every minute, asks Stripe whether it was paid, just in case. It wasn't, so the hold expires, and the two pizzas go back to the slot.",
+   "post_ms": 1200,
+   "do": "js:setTimeout(S4b, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "These statuses form a state machine: a fixed set of statuses, and fixed moves between them. Held can become paid, or expired.",
+   "post_ms": 700,
+   "do": "js:setTimeout(S5, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "And it only moves forward. So a late message from Stripe can't turn a paid order back into held.",
+   "post_ms": 1200,
+   "do": "js:setTimeout(S5b, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "Use it for anything you reserve before payment: time slots, seats at a show, a hotel room.",
+   "post_ms": 1200,
+   "do": "js:setTimeout(S6, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "Now a real case. Game night at a pizza shop. The six o'clock slot fits a hundred and fifty pizzas.",
+   "post_ms": 700,
+   "do": "js:setTimeout(S7, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "Charge first, and in the rush, payments for a hundred and sixty go through. Ten pizzas get refunded.",
+   "post_ms": 700,
+   "do": "js:setTimeout(S7b, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "Hold first, and the hold itself is a conditional update, so it stops at a hundred and fifty. The next order sees slot full before paying.",
+   "post_ms": 1200,
+   "do": "js:setTimeout(S7c, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "Here's where it sits. The API writes the hold to Postgres, then sends the customer to Stripe.",
+   "post_ms": 700,
+   "do": "js:setTimeout(S8, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "Stripe's webhook marks it paid, and the sweeper job expires the rest, every minute.",
+   "post_ms": 1200,
+   "do": "js:setTimeout(S8b, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "Two things to know. Pick the hold time with care. Too short, and slow payers lose their slot. Too long, and stock sits locked up.",
+   "post_ms": 700,
+   "do": "js:setTimeout(S9, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "And a payment can still land just after a hold expires. If the slot is gone by then, refund it automatically.",
+   "post_ms": 1200,
+   "do": "js:setTimeout(S9b, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "In the interview, say: hold, then charge, so we never take money for something we can't deliver.",
+   "post_ms": 600,
+   "do": "js:setTimeout(S10, 0)",
+   "settle_ms": 350
+  }
+ ]
+}

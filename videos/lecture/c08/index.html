@@ -1,0 +1,175 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="color-scheme" content="light">
+<title>Conditional update: lecture</title>
+<link rel="stylesheet" href="../lib/lecture.css">
+<script src="../lib/icons.js"></script>
+<script src="../lib/lecture.js"></script>
+<style>
+.code { position:absolute; background:#1d1d1f; color:#e8e8e8; font-family: Consolas, "Cascadia Mono", monospace; font-size:36px;
+  padding:26px 38px; border-radius:20px; line-height:1.5; white-space:pre; opacity:0; transform:translateY(16px); transition: all .5s; z-index:3; }
+.code.on { opacity:1; transform:none; }
+.code .ln { display:block; padding:0 10px; margin:0 -10px; border-radius:8px; transition: background .4s, color .4s; }
+.code .ln.hl { background:rgba(255,216,102,.18); color:#ffd866; }
+.code .ln.bad { background:rgba(255,120,120,.18); color:#ff9b9b; }
+.code .k { color:#7fb2ff; }
+.code .c { color:#9aa0a6; }
+.note { position:absolute; font-size:36px; font-weight:700; text-align:center; opacity:0; transition: opacity .6s; }
+.note.on { opacity:1; }
+#scen .bar:not([style*="height"]) .v { opacity:0; }
+.card code { font-family: Consolas, "Cascadia Mono", monospace; font-size:42px; color:var(--acc); }
+</style>
+</head>
+<body>
+<script>
+// a dark code box inside a scene: lines is an array of html strings
+function Code(sceneId, { x, y, w, lines }) {
+  const s = document.getElementById(sceneId);
+  const b = document.createElement('div'); b.className = 'code';
+  b.style.left = x + 'px'; b.style.top = y + 'px'; if (w) b.style.width = w + 'px';
+  b.innerHTML = lines.map(l => `<span class="ln">${l}</span>`).join('');
+  s.append(b);
+  const ls = b.querySelectorAll('.ln');
+  return { on: () => b.classList.add('on'), hl: (i, cls = 'hl') => { ls.forEach(l => l.classList.remove('hl', 'bad')); if (i != null) ls[i].classList.add(cls); }, el: b };
+}
+const mono = t => { t.style.fontFamily = 'Consolas, "Cascadia Mono", monospace'; return t; };
+
+Title({ num: 8, name: 'Conditional update', sub: 'Check and change in one database command', phase: 'Protect the invariants', pills: ['No oversell', 'Stock', 'Seats', 'Time slots'] });
+
+// ---- definition: one command checks and changes
+const D = Define('def', {
+  html: 'A <b>database command</b> that <b>checks and changes</b> a row <b>in one step</b>: "subtract 1, but only if at least 1 is left."',
+  extra: { label: 'Built into every SQL database:', pills: ['Postgres', 'MySQL', 'UPDATE ... WHERE'] },
+});
+const dd = D.d;
+dd.node('a', 220, 260, 'user', 'Request 1', '', { w: 190 });
+dd.node('b', 740, 260, 'user', 'Request 2', '', { w: 190 });
+dd.node('row', 480, 600, 'db', 'TV #7', '', { w: 300, h: 150 });
+dd.link('a', 'row'); dd.link('b', 'row');
+const defLeft = dd.text(480, 760, 'left = 1', { size: 60 });
+mono(dd.text(480, 900, 'left - 1, only if left >= 1', { size: 34, color: 'acc' }));
+window.SD = async () => {
+  D.show();
+  await sleep(1400);
+  await dd.send('a', 'row', { dur: 900, label: 'buy' });
+  defLeft.textContent = 'left = 0'; dd.tone('row', 'good'); dd.badge('a', '1 row changed', 'good');
+  await sleep(1600);
+  await dd.send('b', 'row', { dur: 900, label: 'buy', color: 'warn' });
+  dd.badge('b', '0 rows: refused', 'bad'); dd.tag('row', 'still 0', 'bad');
+};
+window.SD2 = () => D.more();
+
+// ---- the problem: read, then write
+const P = Stage('prob', { caption: ['The problem', '1 TV left on sale. Two buyers click Buy at once'] });
+P.node('al', 260, 400, 'user', 'Alice', '', { w: 170 });
+P.node('bo', 260, 760, 'user', 'Bob', '', { w: 170 });
+P.node('db', 1560, 580, 'db', 'Stock row: TV #7', '', { w: 320, h: 150 });
+P.link('al', 'db'); P.link('bo', 'db');
+const pLeft = P.text(1560, 730, 'left = 1', { size: 60 });
+const pSold = P.text(1560, 830, '', { size: 40, color: 'bad' });
+const pCode = Code('prob', { x: 520, y: 860, lines: [
+  '<span class="k">SELECT</span> left <span class="k">FROM</span> stock <span class="k">WHERE</span> id = 7    <span class="c">-- read</span>',
+  '<span class="k">UPDATE</span> stock <span class="k">SET</span> left = 0 <span class="k">WHERE</span> id = 7 <span class="c">-- write</span>',
+] });
+window.S1 = async () => { P.show(); await sleep(700); P.popAll(['al', 'bo']); P.tag('al', 'click!', 'acc'); P.tag('bo', 'click!', 'acc'); };
+window.S1b = async () => {
+  pCode.on(); pCode.hl(0);
+  P.cap('Step 1: both read', 'Each one sees left = 1');
+  await Promise.all([P.send('al', 'db', { dur: 900, label: 'read' }), P.send('bo', 'db', { dur: 900, label: 'read', color: 'warn' })]);
+  await Promise.all([P.send('db', 'al', { dur: 900, label: 'left = 1', color: 'good' }), P.send('db', 'bo', { dur: 900, label: 'left = 1', color: 'good' })]);
+  P.badge('al', 'mine!', 'good'); P.badge('bo', 'mine!', 'good');
+};
+window.S1c = async () => {
+  pCode.hl(1, 'bad');
+  P.cap('Step 2: both write', 'Each one sets left = 0');
+  await Promise.all([P.send('al', 'db', { dur: 900, label: 'left = 0' }), P.send('bo', 'db', { dur: 900, label: 'left = 0', color: 'warn' })]);
+  pLeft.textContent = 'left = 0'; P.tone('db', 'bad');
+  pSold.textContent = '2 TVs sold, 1 in stock';
+  P.badge('al', 'charged', 'bad'); P.badge('bo', 'charged', 'bad');
+  P.cap('Oversold', 'The gap between the read and the write let both in');
+};
+
+// ---- how it works: the check goes inside the write
+const M = Stage('how', { caption: ['The fix: one statement', 'The check lives inside the write'] });
+M.node('al', 260, 400, 'user', 'Alice', '', { w: 170 });
+M.node('bo', 260, 760, 'user', 'Bob', '', { w: 170 });
+M.node('db', 1560, 580, 'db', 'Stock row: TV #7', '', { w: 320, h: 150 });
+M.link('al', 'db'); M.link('bo', 'db');
+const mLeft = M.text(1560, 730, 'left = 1', { size: 60 });
+const mCode = Code('how', { x: 560, y: 840, lines: [
+  '<span class="k">UPDATE</span> stock <span class="k">SET</span> left = left - 1',
+  '<span class="k">WHERE</span> id = 7 <span class="k">AND</span> left &gt;= 1',
+] });
+window.S2 = async () => { M.show(); await sleep(500); mCode.on(); await sleep(1600); mCode.hl(1); };
+let waitDot = null;
+window.S3 = async () => {
+  M.cap('Both send it at once', 'One change to a row at a time');
+  await Promise.all([M.send('al', 'db', { dur: 900, label: 'UPDATE' }), M.send('bo', { x: 1100, y: 690 }, { dur: 900, label: 'UPDATE', color: 'warn' })]);
+  waitDot = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+  Object.entries({ cx: 1100, cy: 690, r: 13, fill: '#bf8700' }).forEach(([k, v]) => waitDot.setAttribute(k, v)); M.fx.append(waitDot);
+  M.badge('db', 'locked: Alice', 'warn'); M.badge('bo', 'waiting...', 'warn');
+};
+window.S3b = async () => {
+  M.cap('Alice runs first', 'Left >= 1 is true, so the row changes');
+  mLeft.textContent = 'left = 0'; M.tone('db', 'good'); M.unbadge('db');
+  M.badge('al', '1 row changed', 'good'); M.tone('al', 'good');
+};
+window.S3c = async () => {
+  M.cap('Then Bob runs', 'It re-checks left >= 1 on the new value: false');
+  if (waitDot) waitDot.remove();
+  await M.send({ x: 1100, y: 690 }, 'db', { dur: 600, label: 'UPDATE', color: 'warn' });
+  M.badge('bo', '0 rows changed', 'bad'); M.tone('bo', 'warn');
+};
+window.S4 = () => { M.badge('bo', 'sold out', 'warn'); M.badge('al', 'got the TV', 'good'); M.cap('The row count is the answer', '1 row: you got it.  0 rows: sold out'); };
+
+// ---- what it's for
+const U = Cards('uses', {
+  head: 'Use it for anything you can run out of', items: [
+    { icon: 'box', title: 'Stock', text: '<code>left &gt;= 1</code>' },
+    { icon: 'users', title: 'Seats', text: '<code>seats_free &gt;= 2</code>' },
+    { icon: 'clock', title: 'Time slots', text: '<code>booked + 2 &lt;= 150</code>' },
+  ],
+});
+window.S5 = () => { U.show(); setTimeout(() => U.reveal(0), 300); setTimeout(() => U.reveal(1), 1600); };
+window.S5b = () => U.reveal(2);
+
+// ---- scenario: electronics sale
+const B = Bars('scen', {
+  head: 'Electronics sale: 50 TVs, 3,000 clicks in the first second', max: 62, charts: [
+    { title: 'Read, then write', bars: [{ label: 'TVs sold', value: 53, color: 'bad', over: true }], limit: { value: 50, label: '50 in stock' } },
+    { title: 'Conditional update', bars: [{ label: 'TVs sold', value: 50, color: 'good' }], limit: { value: 50, label: '50 in stock' } },
+  ],
+});
+const bNote = document.createElement('div'); bNote.className = 'note';
+bNote.style.cssText += 'left:1050px;width:760px;top:960px;color:var(--good)';
+bNote.textContent = 'The other 2,950 see "sold out"';
+document.getElementById('scen').append(bNote);
+window.S6 = () => B.show();
+window.S6b = () => B.grow(0);
+window.S6c = async () => { B.grow(1); await sleep(1700); bNote.classList.add('on'); };
+
+// ---- where it fits
+const Y = System('sys', { highlight: ['api', 'db'] });
+window.S7 = async () => {
+  Y.show(); await sleep(600);
+  for (let i = 0; i < 2; i++) { await Y.flow(['browser', 'cdn', 'lb', 'api', 'db'], { dur: 450 }); }
+};
+window.S7b = () => { Y.cap('No new box', 'Just one statement in the checkout code'); Y.badge('db', 'left >= 1', 'good'); };
+
+// ---- trade-offs
+const T = Cards('trade', {
+  head: 'Two things to know', cols: 2, items: [
+    { icon: 'lock', color: 'warn', title: 'Complex logic?', text: 'SELECT ... FOR UPDATE locks the row. Others wait their turn.' },
+    { icon: 'x', color: 'bad', title: 'No Redis counter or distributed lock', text: 'Then two places hold the truth.' },
+  ],
+});
+window.S8 = () => { T.show(); setTimeout(() => T.reveal(0), 300); };
+window.S8b = () => T.reveal(1);
+
+const Z = Say('say', 'One statement, so the database refuses to go below zero.');
+window.S9 = () => Z.show();
+</script>
+</body>
+</html>

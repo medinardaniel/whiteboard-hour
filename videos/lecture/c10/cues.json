@@ -1,0 +1,138 @@
+{
+ "target": "index.html",
+ "viewport": [
+  1920,
+  1080
+ ],
+ "voice": "en-US-AndrewMultilingualNeural",
+ "rate": "+6%",
+ "pronounce": {
+  "ID": "I D",
+  "IDs": "I Ds",
+  "a7f3": "A seven F three",
+  "API": "A P I"
+ },
+ "load_ms": 1200,
+ "gap_ms": 400,
+ "tail_ms": 1500,
+ "cues": [
+  {
+   "say": "Component ten: the idempotency key.",
+   "post_ms": 900
+  },
+  {
+   "say": "An idempotency key is a random ID that the app attaches to each user action. The server saves it with a uniqueness rule. If the same key arrives again, the server returns the first result, instead of doing the work twice.",
+   "post_ms": 1100,
+   "do": "js:setTimeout(SD, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "Idempotent means doing it twice has the same effect as doing it once. Like a numbered ticket: show it twice, get served once.",
+   "post_ms": 1100,
+   "do": "js:setTimeout(SD2, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "Why do you need it? A customer on a train taps Place order. The server creates the order and charges the card.",
+   "post_ms": 700,
+   "do": "js:setTimeout(S1, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "But the reply is lost in a tunnel. The phone never hears back.",
+   "post_ms": 700,
+   "do": "js:setTimeout(S1b, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "So the app retries, which is right: networks fail. But the server can't tell it's a repeat. It creates a second order, and charges again.",
+   "post_ms": 1200,
+   "do": "js:setTimeout(S1c, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "Here's the fix. When the customer taps, the app makes a random key, say a7f3, and sends it with every try of that one action.",
+   "post_ms": 900,
+   "do": "js:setTimeout(S2, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "On the first try, the server saves a7f3 with the result: order one thousand and one. The key column has a unique constraint, a rule that rejects duplicates.",
+   "post_ms": 900,
+   "do": "js:setTimeout(S3, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "The reply is lost again. The app retries, with the same key.",
+   "post_ms": 700,
+   "do": "js:setTimeout(S3b, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "This time the server finds a7f3 already saved. It skips the work and returns the original order. One order, one charge.",
+   "post_ms": 1200,
+   "do": "js:setTimeout(S3c, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "One more layer. The server passes the order ID to Stripe as Stripe's own idempotency key. If the charge call repeats, Stripe returns the first charge.",
+   "post_ms": 1200,
+   "do": "js:setTimeout(S4, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "Use it on every action that creates something, or charges money.",
+   "post_ms": 500,
+   "do": "js:setTimeout(S5, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "And on the receiving side too. Stripe can deliver the same webhook event twice, so save its event ID and ignore repeats.",
+   "post_ms": 1200,
+   "do": "js:setTimeout(S5b, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "How often does this bite? Say a print shop's app takes five thousand orders a day, and two percent lose the reply and retry. That's a hundred double charges a day.",
+   "post_ms": 700,
+   "do": "js:setTimeout(S6, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "With idempotency keys, it's zero. The retries still happen. They just do no harm.",
+   "post_ms": 1200,
+   "do": "js:setTimeout(S6b, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "Here's where it sits. The app makes the key, and the API checks it against a unique column in Postgres.",
+   "post_ms": 700,
+   "do": "js:setTimeout(S7, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "It passes a key on to Stripe, and dedupes Stripe's webhook events on the way back.",
+   "post_ms": 1200,
+   "do": "js:setTimeout(S7b, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "Two things to know. One key per action: a retry reuses it, and a new order gets a new one.",
+   "post_ms": 700,
+   "do": "js:setTimeout(S8, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "And exactly once isn't possible on a real network. You get at least once, with repeats made harmless.",
+   "post_ms": 1200,
+   "do": "js:setTimeout(S8b, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "In the interview, say: a client key with a unique constraint, the same key passed to Stripe, and webhook event IDs deduped.",
+   "post_ms": 600,
+   "do": "js:setTimeout(S9, 0)",
+   "settle_ms": 350
+  }
+ ]
+}

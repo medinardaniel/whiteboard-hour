@@ -1,0 +1,136 @@
+{
+ "target": "index.html",
+ "viewport": [
+  1920,
+  1080
+ ],
+ "voice": "en-US-AndrewMultilingualNeural",
+ "rate": "+6%",
+ "pronounce": {
+  "HTTP": "H T T P",
+  "IP": "I P",
+  "IPs": "I Ps",
+  "API": "A P I",
+  "AWS": "A W S",
+  "WAF": "waff",
+  "CDN": "C D N",
+  "TVs": "T Vs"
+ },
+ "load_ms": 1200,
+ "gap_ms": 400,
+ "tail_ms": 1500,
+ "cues": [
+  {
+   "say": "Component twelve: rate limits.",
+   "post_ms": 900
+  },
+  {
+   "say": "A rate limit is a cap on how often one person or machine can call you, say ten requests a second. Anything over the cap gets an instant error that says: slow down.",
+   "post_ms": 1100,
+   "do": "js:setTimeout(SD, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "That error is HTTP status four twenty-nine: too many requests. You rarely build the first layer yourself. Your CDN or firewall offers it as a setting.",
+   "post_ms": 1100,
+   "do": "js:setTimeout(SD2, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "Why do you need it? An electronics sale opens. A reseller's script hits checkout three hundred times a second, from one IP address.",
+   "post_ms": 700,
+   "do": "js:setTimeout(S1, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "It floods your servers, and buys the TVs before real customers can click.",
+   "post_ms": 700,
+   "do": "js:setTimeout(S1b, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "And it's not always on purpose. A buggy app that retries in a tight loop can turn one small hiccup into an outage.",
+   "post_ms": 1200,
+   "do": "js:setTimeout(S1c, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "The usual way to enforce a limit is a token bucket. Each IP address gets a bucket of ten tokens, refilled at ten a second. Every request spends one.",
+   "post_ms": 900,
+   "do": "js:setTimeout(S2, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "A normal customer spends a few, and the bucket refills. They never notice.",
+   "post_ms": 700,
+   "do": "js:setTimeout(S3, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "The script empties its bucket in a blink. Every request after that, with no token left, gets a four twenty-nine, without ever reaching your servers.",
+   "post_ms": 900,
+   "do": "js:setTimeout(S4, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "A well-behaved client reads that error, waits, and tries again later.",
+   "post_ms": 1200,
+   "do": "js:setTimeout(S4b, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "So it protects you from bots, and from retry storms: the buggy loop gets errors, not your database.",
+   "post_ms": 500,
+   "do": "js:setTimeout(S5, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "It also keeps you under other people's limits. Stripe allows about a hundred requests a second, so you cap your own calls.",
+   "post_ms": 1200,
+   "do": "js:setTimeout(S5b, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "Back to the sale. With an edge cap of ten a second per IP, two hundred and ninety of the script's three hundred requests are rejected before your servers.",
+   "post_ms": 700,
+   "do": "js:setTimeout(S6, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "But the script can switch IP addresses. So the API also caps orders per customer: two per phone number, whatever the IP.",
+   "post_ms": 1200,
+   "do": "js:setTimeout(S6b, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "Here's where it sits. The per IP cap runs at the edge, in the CDN and its web application firewall, or WAF.",
+   "post_ms": 700,
+   "do": "js:setTimeout(S7, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "The business cap lives in the API, where it knows who the customer is.",
+   "post_ms": 1200,
+   "do": "js:setTimeout(S7b, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "Two things to know. An office or a mobile carrier can put many real people behind one IP, so leave room in the cap.",
+   "post_ms": 700,
+   "do": "js:setTimeout(S8, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "And per IP alone is easy to dodge, because scripts rotate addresses. The per-customer cap catches that.",
+   "post_ms": 1200,
+   "do": "js:setTimeout(S8b, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "In the interview, say: per IP at the edge, and two orders per phone in the API.",
+   "post_ms": 600,
+   "do": "js:setTimeout(S9, 0)",
+   "settle_ms": 350
+  }
+ ]
+}

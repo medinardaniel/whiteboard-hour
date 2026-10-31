@@ -1,0 +1,205 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="color-scheme" content="light">
+<title>Holds that expire: lecture</title>
+<link rel="stylesheet" href="../lib/lecture.css">
+<script src="../lib/icons.js"></script>
+<script src="../lib/lecture.js"></script>
+<style>
+#scen .bar:not([style*="height"]) .v { opacity:0; }
+.note { position:absolute; font-size:36px; font-weight:700; text-align:center; opacity:0; transition: opacity .6s; }
+.note.on { opacity:1; }
+</style>
+</head>
+<body>
+<script>
+// a countdown ring we can stop early (lib ring() can't be cancelled)
+function Ring(d, key, ms, color = '#bf8700') {
+  const n = d.N[key], R = Math.max(n.w, n.h) / 2 + 22, C = 2 * Math.PI * R;
+  const c = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+  Object.entries({ cx: n.x, cy: n.y, r: R, fill: 'none', stroke: color, 'stroke-width': 10, 'stroke-dasharray': C, transform: `rotate(-90 ${n.x} ${n.y})` })
+    .forEach(([k, v]) => c.setAttribute(k, v));
+  d.fx.append(c);
+  const a = c.animate([{ strokeDashoffset: 0 }, { strokeDashoffset: C }], { duration: ms, fill: 'forwards', easing: 'linear' });
+  return { stop: () => { a.pause(); c.remove(); }, done: a.finished.then(() => c.remove()) };
+}
+
+Title({ num: 9, name: 'Holds that expire', sub: 'Reserve first, then take payment', phase: 'Protect the invariants', pills: ['Anything reserved before payment', 'No charge without stock'] });
+
+// ---- definition: reserve, then pay or expire
+const D = Define('def', {
+  html: 'A pattern: <b>reserve the item first</b>, then take payment. <b>Unpaid holds expire</b> and the item goes back. The status only moves <b>forward</b>.',
+  extra: { label: 'Like a store setting an item aside:', pills: ['for 10 minutes', 'while you get your wallet'] },
+});
+const dd = D.d;
+dd.node('held', 250, 540, 'lock', 'held', '', { w: 190, hidden: true });
+dd.node('paid', 720, 330, 'check', 'paid', '', { w: 190, tone: 'good', hidden: true });
+dd.node('exp', 720, 750, 'clock', 'expired', '', { w: 190, tone: 'muted', hidden: true });
+dd.link('held', 'paid'); dd.link('held', 'exp');
+window.SD = async () => {
+  D.show();
+  dd.pop('held'); await sleep(900);
+  const r = Ring(dd, 'held', 4200);
+  dd.popAll(['paid', 'exp'], 500);
+  await sleep(1500);
+  await dd.send('held', 'paid', { color: 'good', label: 'paid in time' });
+  dd.tone('paid', 'good hl');
+  await sleep(700);
+  await dd.send('held', 'exp', { color: 'muted', label: 'time ran out' });
+  dd.badge('exp', 'item goes back', 'muted', 'bottom');
+};
+window.SD2 = () => D.more();
+
+// ---- the problem: charge first
+const P = Stage('prob', { caption: ['The problem', 'Charge first, check the slot later'] });
+P.node('c', 260, 560, 'user', 'Customer', '2 pizzas, 6:00', { w: 220 });
+P.node('pay', 900, 560, 'card', 'Stripe', 'charges the card', { w: 220 });
+P.node('slot', 1560, 560, 'clock', '6:00 slot', '148 of 150 taken', { w: 240 });
+P.link('c', 'pay'); P.link('pay', 'slot');
+window.S1 = async () => {
+  P.show(); await sleep(900);
+  await P.send('c', 'pay', { dur: 900, label: 'pay' });
+  P.tone('pay', 'good'); P.badge('pay', 'charged', 'good');
+};
+window.S1b = async () => {
+  P.rename('slot', null, '150 of 150 taken'); P.tag('slot', 'others booked', 'warn'); P.tone('slot', 'warn');
+  await sleep(700);
+  await P.send('pay', 'slot', { dur: 900, label: 'add 2' });
+  P.tone('slot', 'bad'); P.badge('slot', 'slot full', 'bad');
+  await sleep(1000);
+  await P.send('pay', 'c', { dur: 900, color: 'bad', label: 'refund' });
+  P.tone('c', 'bad'); P.tag('c', 'angry', 'bad');
+  P.cap('Money for pizza you can\'t make', 'Refunds and angry customers');
+};
+
+// ---- how it works
+const M = Stage('how', { caption: ['Step 1: reserve', 'Hold 2 of the slot\'s 150, with a 10-minute clock'] });
+M.node('c', 220, 540, 'user', 'Customer', '', { w: 190 });
+M.node('hold', 800, 540, 'lock', 'Hold: 2 pizzas', 'status: held', { w: 270, hidden: true });
+M.node('slot', 800, 880, 'clock', '6:00 slot', 'free: 150 of 150', { w: 260 });
+M.node('pay', 1420, 290, 'card', 'Stripe', 'payment page', { w: 220 });
+M.node('kit', 1640, 600, 'bell', 'Kitchen', '', { w: 190 });
+M.node('sw', 1420, 880, 'sweep', 'Sweeper', 'runs every minute', { w: 250 });
+M.link('c', 'hold'); M.link('hold', 'slot'); M.link('c', 'pay', { curve: 260 }); M.link('pay', 'hold', { dash: 1 }); M.link('hold', 'kit'); M.link('sw', 'hold'); M.link('sw', 'pay', { dash: 1 });
+M.dim(['pay', 'kit', 'sw']);
+let ring = null;
+const clockTxt = M.text(800, 340, '', { size: 34, color: 'warn' });
+window.S2 = async () => {
+  M.show(); await sleep(500);
+  await M.send('c', 'hold', { dur: 800, label: 'reserve' });
+  M.pop('hold'); M.rename('slot', null, 'free: 148 of 150'); M.tone('slot', 'hl');
+  await sleep(500);
+  clockTxt.textContent = 'expires in 10 min';
+  ring = Ring(M, 'hold', 30000);
+};
+window.S3 = async () => {
+  M.cap('Step 2: pay', 'Stripe\'s webhook flips the hold to paid');
+  M.dim(['pay', 'kit'], false);
+  await M.send('c', 'pay', { dur: 1000, curve: 260, label: 'pay' });
+  M.tone('pay', 'good');
+  await M.send('pay', 'hold', { dur: 1000, color: 'good', label: 'webhook: paid' });
+  ring.stop(); clockTxt.textContent = '';
+  M.tone('hold', 'good'); M.rename('hold', null, 'status: paid');
+  await M.send('hold', 'kit', { dur: 800, color: 'good', label: 'order' });
+  M.tone('kit', 'good'); M.badge('kit', 'cooking', 'good');
+};
+window.S4 = async () => {
+  M.cap('Or: no payment', 'Another customer walks away');
+  M.tone('pay', ''); M.tone('kit', ''); M.unbadge('kit'); M.dim(['kit']);
+  M.tone('hold', ''); M.rename('hold', 'Hold: 2 pizzas', 'status: held'); M.tag('hold', 'new hold', 'acc'); M.rename('slot', null, 'free: 146 of 150');
+  clockTxt.textContent = 'expires in 10 min';
+  ring = Ring(M, 'hold', 2600);
+  await ring.done;
+  clockTxt.textContent = '10 minutes, no payment'; M.tone('hold', 'warn');
+};
+window.S4b = async () => {
+  M.cap('Step 3: the sweeper', 'Asks Stripe first, then releases the 2');
+  M.dim(['sw'], false); M.tone('sw', 'hl');
+  await M.send('sw', 'pay', { dur: 900, label: 'paid?' });
+  await M.send('pay', 'sw', { dur: 900, color: 'bad', label: 'no' });
+  await M.send('sw', 'hold', { dur: 800, color: 'muted', label: 'expire' });
+  M.tone('hold', 'muted'); M.rename('hold', null, 'status: expired'); clockTxt.textContent = '';
+  await M.send('hold', 'slot', { dur: 700, color: 'good', label: '+2 back' });
+  M.rename('slot', null, 'free: 148 of 150'); M.tag('slot', 'free again', 'good');
+};
+
+// ---- the state machine
+const F = Stage('sm', { caption: ['A state machine', 'Fixed statuses, fixed moves, forward only'] });
+F.node('held', 520, 580, 'lock', 'held', '', { w: 220, h: 150 });
+F.node('paid', 1300, 360, 'check', 'paid', '', { w: 220, h: 150, tone: 'good' });
+F.node('exp', 1300, 820, 'clock', 'expired', '', { w: 220, h: 150, tone: 'muted' });
+F.link('held', 'paid', { tone: 'good' }); F.link('held', 'exp');
+window.S5 = async () => {
+  F.show(); await sleep(800);
+  await F.send('held', 'paid', { color: 'good', label: 'allowed' });
+  await F.send('held', 'exp', { color: 'muted', label: 'allowed' });
+};
+window.S5b = async () => {
+  F.cap('A late message from Stripe', 'paid back to held? Refused');
+  await F.send('paid', { x: 910, y: 470 }, { color: 'bad', label: 'set held', dur: 800 });
+  F.badge('paid', 'stays paid', 'good'); F.tag('held', 'refused', 'bad', -110);
+  F.text(910, 480, '✕', { size: 90, color: 'bad' });
+};
+
+// ---- what it's for
+const U = Cards('uses', {
+  head: 'Anything reserved before payment', items: [
+    { icon: 'clock', title: 'Time slots', text: 'Pizzas for the 6:00 slot' },
+    { icon: 'users', title: 'Seats', text: 'A class, a show, a flight' },
+    { icon: 'building', title: 'Rooms', text: 'A hotel night' },
+  ],
+});
+window.S6 = () => { U.show(); setTimeout(() => U.reveal(0), 300); setTimeout(() => U.reveal(1), 1500); setTimeout(() => U.reveal(2), 2700); };
+
+// ---- scenario: game night
+const B = Bars('scen', {
+  head: 'Game night: the 6:00 slot fits 150 pizzas', max: 180, charts: [
+    { title: 'Charge first', bars: [{ label: 'pizzas paid for', value: 160, color: 'bad', over: true }], limit: { value: 150, label: 'kitchen fits 150' } },
+    { title: 'Hold first', bars: [{ label: 'pizzas paid for', value: 150, color: 'good' }], limit: { value: 150, label: 'kitchen fits 150' } },
+  ],
+});
+const bNoteL = document.createElement('div'); bNoteL.className = 'note';
+bNoteL.style.cssText += 'left:110px;width:760px;top:960px;color:var(--bad)';
+bNoteL.textContent = '10 pizzas refunded';
+const bNoteR = document.createElement('div'); bNoteR.className = 'note';
+bNoteR.style.cssText += 'left:1050px;width:760px;top:960px;color:var(--good)';
+bNoteR.textContent = 'The next order sees "slot full" before paying';
+document.getElementById('scen').append(bNoteL, bNoteR);
+window.S7 = () => B.show();
+window.S7b = async () => { B.grow(0); await sleep(1700); bNoteL.classList.add('on'); };
+window.S7c = async () => { B.grow(1); await sleep(1700); bNoteR.classList.add('on'); };
+
+// ---- where it fits
+const Y = System('sys', { highlight: ['api', 'db', 'pay', 'jobs'] });
+window.S8 = async () => {
+  Y.show(); await sleep(600);
+  await Y.flow(['browser', 'cdn', 'lb', 'api', 'db'], { dur: 420 });
+  Y.badge('db', 'held', 'warn');
+  await Y.send('api', 'pay', { dur: 600 });
+};
+window.S8b = async () => {
+  Y.cap('Paid or expired', 'The webhook marks paid; the sweeper expires the rest');
+  await Y.send('pay', 'api', { dur: 600, color: 'good', label: 'webhook' });
+  await Y.send('api', 'db', { dur: 500, color: 'good' });
+  Y.badge('db', 'paid', 'good');
+  await sleep(600);
+  await Y.send('jobs', 'db', { dur: 700, color: 'muted', label: 'every minute' });
+};
+
+// ---- trade-offs
+const T = Cards('trade', {
+  head: 'Two things to know', cols: 2, items: [
+    { icon: 'timer', color: 'warn', title: 'Pick the hold time', text: 'Too short and slow payers lose the slot. Too long and stock sits locked up.' },
+    { icon: 'card', color: 'bad', title: 'Late payments happen', text: 'Paid just after it expired and the slot is gone? Refund it automatically.' },
+  ],
+});
+window.S9 = () => { T.show(); setTimeout(() => T.reveal(0), 300); };
+window.S9b = () => T.reveal(1);
+
+const Z = Say('say', 'Hold, then charge, so we never take money for something we can\'t deliver.');
+window.S10 = () => Z.show();
+</script>
+</body>
+</html>
