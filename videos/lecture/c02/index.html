@@ -1,0 +1,150 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="color-scheme" content="light">
+<title>Load balancer: lecture</title>
+<link rel="stylesheet" href="../lib/lecture.css">
+<script src="../lib/icons.js"></script>
+<script src="../lib/lecture.js"></script>
+</head>
+<body>
+<script>
+Title({ num: 2, name: 'Load balancer', sub: 'One front door, many copies behind it', phase: 'Version 1', pills: ['Every design', 'Survives a crashed copy'] });
+
+// ---- definition: spreads requests, skips unhealthy copies
+const D = Define('def', {
+  html: 'A <b>server in front of your app</b> that spreads incoming requests across <b>several identical copies</b>, and stops sending traffic to any copy that <b>isn\'t healthy</b>.',
+  extra: { label: 'Usually managed, not built:', pills: ['AWS ALB', 'Azure App Gateway', 'Google Cloud LB'] },
+});
+const dd = D.d;
+dd.node('u', 150, 540, 'users', 'Users', '', { w: 150 });
+dd.node('lb', 430, 540, 'split', 'Load balancer', '', { w: 200, hidden: true });
+['1', '2', '3'].forEach((n, i) => dd.node('c' + n, 790, 270 + i * 270, 'server', 'Copy ' + n, '', { w: 160, hidden: true }));
+['c1', 'c2', 'c3'].forEach(k => dd.link('lb', k));
+dd.link('u', 'lb');
+window.SD = async () => {
+  D.show();
+  dd.popAll(['lb', 'c1', 'c2', 'c3'], 350);
+  await sleep(1600);
+  let i = 0, targets = ['c1', 'c2', 'c3'];
+  const tick = async () => { const t = targets[i++ % targets.length]; await dd.send('u', 'lb', { dur: 450 }); dd.send('lb', t, { dur: 450, color: 'good' }); };
+  const id = setInterval(tick, 520);
+  await sleep(6500);
+  dd.tone('c3', 'bad'); dd.tag('c3', 'not healthy', 'bad');
+  targets = ['c1', 'c2'];
+  setTimeout(() => clearInterval(id), 9000);
+};
+window.SD2 = () => D.more();
+
+// ---- the problem: one server
+const P = Stage('prob', { caption: ['The problem', 'One server takes every request'] });
+P.node('u', 380, 540, 'users', 'Users', '', { w: 160 });
+P.node('api', 1300, 540, 'server', 'Your server', 'the only copy', { w: 220 });
+P.link('u', 'api');
+let stopP;
+window.S1 = () => {
+  P.show(); P.meter('api', .2);
+  stopP = P.stream('u', 'api', { every: 220, dur: 900, onSend: () => P.bump('api', .03) });
+};
+window.S1b = async () => {
+  await sleep(1500);
+  stopP(); P.tone('api', 'bad'); P.rename('api', 'Your server', 'crashed');
+  P.cap('One server, one point of failure', 'A crash or a deploy takes the whole site down');
+  for (let i = 0; i < 4; i++) { P.tag('u', i % 2 ? 'site down' : '503 error', 'bad'); await sleep(900); }
+};
+
+// ---- how it works: round robin and health checks
+const M = Stage('how', { caption: ['One address, many copies', 'Users only ever see the load balancer'] });
+M.node('u', 220, 540, 'users', 'Users', '', { w: 160 });
+M.node('lb', 760, 540, 'split', 'Load balancer', 'shop.com', { w: 230, hidden: true });
+['1', '2', '3'].forEach((n, i) => M.node('c' + n, 1400, 260 + i * 280, 'server', 'Copy ' + n, '', { w: 180, hidden: true }));
+M.link('u', 'lb'); ['c1', 'c2', 'c3'].forEach(k => M.link('lb', k));
+let rr = ['c1', 'c2', 'c3'], rrStop = null;
+function roundRobin() {
+  let i = 0;
+  const id = setInterval(async () => {
+    const t = rr[i++ % rr.length]; await M.send('u', 'lb', { dur: 420 });
+    M.send('lb', t, { dur: 520, color: 'good', label: t.replace('c', '#') });
+  }, 650);
+  return () => clearInterval(id);
+}
+window.S2 = () => { M.show(); M.popAll(['lb', 'c1', 'c2', 'c3'], 450); };
+window.S3 = () => { M.cap('Round robin', 'Each request goes to the next copy in turn'); rrStop = roundRobin(); };
+window.S4 = async () => {
+  M.cap('Health checks', 'Every few seconds: GET /health');
+  rrStop();
+  for (let r = 0; r < 2; r++) {
+    await Promise.all(['c1', 'c2', 'c3'].map(k => M.send('lb', k, { color: 'muted', r: 8, dur: 600 })));
+    await Promise.all(['c1', 'c2'].map(k => M.send(k, 'lb', { color: 'good', r: 8, dur: 600, label: '200 OK' })));
+  }
+  M.tone('c3', 'bad'); M.tag('c3', 'timeout', 'bad');
+};
+window.S4b = async () => {
+  M.cap('Unhealthy copy skipped', 'Traffic goes only to healthy copies');
+  M.linkTone('lb-c3', 'dim'); rr = ['c1', 'c2']; rrStop = roundRobin();
+  await sleep(4200);
+  M.tone('c3', 'good'); M.tag('c3', 'healthy again', 'good'); M.linkTone('lb-c3', ''); rr = ['c1', 'c2', 'c3'];
+};
+
+// ---- what it's for
+const U = Cards('uses', {
+  head: 'Why every design has one', items: [
+    { icon: 'scaleup', title: 'Capacity', text: 'More copies handle more traffic.' },
+    { icon: 'check', color: 'good', title: 'Availability', text: 'One copy can die and the site stays up.' },
+    { icon: 'lock', title: 'HTTPS ends here', text: 'Copies don\'t each manage certificates.' },
+  ],
+});
+window.S5 = () => { if (rrStop) rrStop(); U.show(); setTimeout(() => U.reveal(0), 300); };
+window.S5b = () => U.reveal(1);
+window.S5c = () => U.reveal(2);
+
+// ---- scenario: tire shop, 9 AM crash
+const S = Stage('scen', { caption: ['', ''] });
+S.text(480, 190, 'Without a load balancer', { color: 'bad', size: 46 });
+S.text(1440, 190, 'With one', { color: 'good', size: 46 });
+S.node('bl', 220, 560, 'users', 'Customers', '', { w: 180 });
+S.node('al', 700, 560, 'server', 'Server', 'the one they use', { w: 220 });
+S.node('br', 1080, 560, 'users', 'Customers', '', { w: 180 });
+S.node('lb', 1400, 560, 'split', 'Load balancer', '', { w: 210 });
+S.node('a', 1740, 380, 'server', 'Copy A', '', { w: 170 });
+S.node('b', 1740, 740, 'server', 'Copy B', '', { w: 170 });
+S.link('bl', 'al'); S.link('br', 'lb'); S.link('lb', 'a'); S.link('lb', 'b');
+S.text(960, 980, 'Tire shop, 9 AM: one server crashes on a bug', { color: 'muted', size: 34, weight: 600 });
+let sL, sR;
+window.S6 = async () => {
+  S.show();
+  sL = S.stream('bl', 'al', { every: 450, color: 'good', dur: 700 });
+  let i = 0; sR = setInterval(async () => { const t = ['a', 'b'][i++ % 2]; await S.send('br', 'lb', { dur: 380 }); S.send('lb', t, { color: 'good', dur: 450 }); }, 520);
+  await sleep(3200);
+  S.tone('al', 'bad'); S.tone('b', 'bad'); S.tag('al', 'crash', 'bad'); S.tag('b', 'crash', 'bad');
+};
+window.S6b = async () => {
+  sL(); for (let i = 0; i < 5; i++) { S.tag('bl', 'error', 'bad'); await sleep(900); }
+};
+window.S6c = () => {
+  clearInterval(sR); S.linkTone('lb-b', 'dim');
+  sR = setInterval(async () => { await S.send('br', 'lb', { dur: 380 }); S.send('lb', 'a', { color: 'good', dur: 450 }); }, 520);
+  S.badge('a', 'all traffic', 'good');
+};
+
+// ---- where it fits
+const Y = System('sys', { highlight: ['lb', 'api'] });
+window.S7 = async () => { clearInterval(sR); Y.show(); await sleep(600); for (let i = 0; i < 3; i++) { Y.flow(['browser', 'cdn', 'lb', 'api'], { dur: 500 }); await sleep(900); } };
+window.S7b = () => { Y.cap('Before a spike', 'Add copies behind it; it can also send a few users to a new release'); };
+
+// ---- trade-offs
+const T = Cards('trade', {
+  head: 'Two things to know', cols: 2, items: [
+    { icon: 'building', color: 'warn', title: 'It\'s the front door', text: 'The managed service runs it across several data centers, so it isn\'t a single point of failure.' },
+    { icon: 'user', color: 'bad', title: 'Copies must be stateless', text: 'Or the next request lands on a copy that doesn\'t know the user.' },
+  ],
+});
+window.S8 = () => { T.show(); setTimeout(() => T.reveal(0), 300); };
+window.S8b = () => T.reveal(1);
+
+const Z = Say('say', 'Two copies behind a load balancer, so one can die.');
+window.S9 = () => Z.show();
+</script>
+</body>
+</html>
