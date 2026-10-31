@@ -214,6 +214,70 @@ def page(title, current, body, toc):
 """
 
 
+PRINT_CSS = """
+@page { size: Letter; margin: 0.6in 0.65in; }
+:root { --bg:#fff; --fg:#111; --muted:#555; --line:#ccc; --card:#fff; --accent:#1d4aa8; --accent-soft:#eef2fb; --code:#f2f2f2; }
+body { font-size: 10pt; line-height: 1.4; }
+.card dt { display: inline; font-size: 7.5pt; margin: 0; }
+.card dt::after { content: ": "; }
+.card dd { display: inline; margin: 0; }
+.card dd::after { content: "\\A"; white-space: pre; }
+.card-title { margin-bottom: .15rem; }
+.flow .box { padding: .25rem .5rem; font-size: 9pt; }
+.flow .arrow { line-height: 1.1; }
+h2 { margin: 1.4rem 0 .4rem; } h3 { margin: 1rem 0 .3rem; }
+li { margin: .15rem 0; }
+main { max-width: none; padding: 0; }
+.part { break-before: page; }
+.part:first-of-type { break-before: auto; }
+.part-label { font-size: 9pt; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin: 0; }
+h1 { font-size: 18pt; } h2 { font-size: 14pt; break-after: avoid; } h3, h4 { break-after: avoid; }
+.q { break-before: page; }
+.card, .pair, .box, li, blockquote, pre { break-inside: avoid; }
+.cards { grid-template-columns: 1fr 1fr; gap: .45rem; }
+.card { padding: .5rem .65rem; }
+.card dt { margin-top: .25rem; }
+.pair { display: grid; grid-template-columns: 2fr 3fr; gap: 1rem; padding: .35rem .7rem; }
+details.answer > summary { display: none; }
+.answer-body { border: 0; padding: 0; margin: 0; background: none; }
+.answer-label { font-size: 9pt; text-transform: uppercase; letter-spacing: .08em; color: var(--accent); border-top: 1.5px solid var(--accent); padding-top: .3rem; margin-top: 1rem; }
+.cover { height: 9in; display: flex; flex-direction: column; justify-content: center; }
+.cover h1 { font-size: 30pt; margin: 0 0 .5rem; }
+.cover ol { font-size: 12pt; }
+"""
+
+
+def build_print():
+    """One printable HTML with every answer shown, for print/whiteboard-hour.pdf."""
+    parts = []
+    for src, _, label in PAGES:
+        lines = (ROOT / "src" / src).read_text(encoding="utf-8").splitlines()
+        body = render(lines, [])
+        body = body.replace("<details class=\"answer\">", "<details class=\"answer\" open>")
+        body = body.replace('<div class="answer-body">', '<div class="answer-body"><p class="answer-label">Answer</p>')
+        if src == "questions.md":
+            body = re.sub(r'(<hr>\s*)?<h2 id="(q-[\w-]+|drills)"', r'<h2 class="q" id="\2"', body)
+        body = re.sub(r'href="(index|components|questions)\.html"', lambda m: f'href="#part-{m.group(1)}"', body)
+        dest_key = dict((p[0], p[1]) for p in PAGES)[src].split(".")[0]
+        parts.append(f'<section class="part" id="part-{dest_key}"><p class="part-label">{label}</p>{body}</section>')
+    cover = (
+        f'<section class="cover"><h1>{SITE}</h1><p>System design for a small business with a big traffic spike.</p>'
+        '<ol><li><a href="#part-index">Framework</a>: the six phases in 60 minutes</li>'
+        '<li><a href="#part-components">Components</a>: what each part is and when to use it</li>'
+        '<li><a href="#part-questions">Sample questions</a>: 8 prompts with worked answers, then 20 follow-up drills</li></ol></section>'
+    )
+    css = (ROOT / "style.css").read_text(encoding="utf-8")
+    css = re.sub(r"@media \(prefers-color-scheme: dark\) \{.*?\n\}\n", "", css, flags=re.S)
+    out = ROOT / "print"
+    out.mkdir(exist_ok=True)
+    (out / "whiteboard-hour.html").write_text(
+        f'<!doctype html><html lang="en"><head><meta charset="utf-8"><title>{SITE}</title>'
+        f"<style>{css}{PRINT_CSS}</style></head><body><main>{cover}{''.join(parts)}</main></body></html>",
+        encoding="utf-8",
+    )
+    print("wrote print/whiteboard-hour.html")
+
+
 def main():
     for src, dest, label in PAGES:
         lines = (ROOT / "src" / src).read_text(encoding="utf-8").splitlines()
@@ -221,6 +285,7 @@ def main():
         body = render(lines, toc)
         (ROOT / dest).write_text(page(label, dest, body, toc), encoding="utf-8")
         print("wrote", dest)
+    build_print()
 
 
 if __name__ == "__main__":
