@@ -189,3 +189,8 @@ svg.v { display: block; width: 100%; height: auto; margin: 0 auto; overflow: vis
 .phase blockquote { margin: .5rem 0; padding: .4rem .7rem; font-size: .95rem; }
 .chips ul { display: flex; flex-wrap: wrap; gap: .4rem; list-style: none; padding: 0; margin: .5rem 0; }
 .chips li { margin: 0; padding: .3rem .7rem; border: 1px solid var(--line); background: var(--card); border-radius: 999px; font-size: .92rem; }
+
+/* Worked example and the line to say, on component cards */
+.card dd.f-example { background: var(--accent-soft); border-left: 3px solid var(--accent); border-radius: 0 8px 8px 0; padding: .55rem .75rem; margin: .2rem 0 .3rem; }
+.card dt.f-example { color: var(--accent); font-weight: 700; }
+.card dd.f-say-this { font-weight: 600; }

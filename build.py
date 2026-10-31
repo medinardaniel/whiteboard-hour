@@ -75,7 +75,7 @@ def table(lines, with_visuals=False):
             title = inline(r[0])
             fields = list(zip(head[1:], r[1:]))
         dl = "".join(
-            f"<dt>{inline(h)}</dt><dd>{inline(v)}</dd>" for h, v in fields if v
+            f'<dt class="f-{slug(h)}">{inline(h)}</dt><dd class="f-{slug(h)}">{inline(v)}</dd>' for h, v in fields if v
         )
         vis = ""
         if with_visuals:
@@ -294,6 +294,16 @@ details.answer > summary { display: none; }
 #part-index .chips li { padding: .1rem .5rem; font-size: 8.5pt; }
 .vis { padding: .1rem; margin: .2rem 0 .3rem; }
 .vis svg.v { max-height: 1.5in; width: auto; max-width: 100% !important; }
+#part-components .cards { grid-template-columns: 1fr; gap: .6rem; }
+#part-components .card { padding: .6rem .8rem; }
+#part-components .card-title { font-size: 12pt; }
+#part-components .vis svg.v { max-height: 1.2in; }
+#part-components .card { font-size: 9.3pt; line-height: 1.32; }
+@page { margin: 0.5in 0.6in; }
+#part-components .card dd.f-example { display: block; margin: .25rem 0 .35rem; }
+#part-components .card dd.f-example::after { content: none; }
+#part-components .card dt.f-example { display: block; margin-top: .3rem; }
+#part-components .card dt.f-example::after { content: none; }
 .cover { height: 9in; display: flex; flex-direction: column; justify-content: center; }
 .cover h1 { font-size: 30pt; margin: 0 0 .5rem; }
 .cover ol { font-size: 12pt; }
