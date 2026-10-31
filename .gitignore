@@ -3,3 +3,7 @@ videos/raw/
 *_build/
 __pycache__/
 videos/record.log
+videos/lecture/*/raw*
+videos/lecture/*/preview/
+videos/lecture/*/f*.png
+videos/lecture/*/c*-lecture.*

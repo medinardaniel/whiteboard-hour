@@ -1,0 +1,78 @@
+{
+ "target": "index.html",
+ "viewport": [
+  1920,
+  1080
+ ],
+ "voice": "en-US-AndrewMultilingualNeural",
+ "rate": "+4%",
+ "pronounce": {
+  "CDN": "C D N",
+  "TTL": "T T L",
+  "DNS": "D N S",
+  "API": "A P I"
+ },
+ "load_ms": 1500,
+ "gap_ms": 400,
+ "tail_ms": 1800,
+ "cues": [
+  {
+   "say": "This is the CDN, the content delivery network. It's usually the first box you draw after the browser, and it's the cheapest way to survive a traffic spike."
+  },
+  {
+   "say": "Start with the problem. Your site runs on two servers in Virginia. A visitor in Sydney opens the homepage, about two megabytes of pages, scripts and photos, and every file crosses the Pacific and back. Now picture fifty thousand visitors, and your two servers sending the same files to every one.",
+   "do": "js:setTimeout(S1, 0)",
+   "settle_ms": 500
+  },
+  {
+   "say": "A CDN puts copies of your files close to your users. It's a network of edge servers in hundreds of cities. Your own servers become the origin, the source those copies come from.",
+   "do": "js:setTimeout(S2, 0)",
+   "settle_ms": 500
+  },
+  {
+   "say": "The first visitor in Sydney asks the nearby edge for a photo. It doesn't have it yet. That's a cache miss. So the edge fetches it from the origin once, keeps a copy, and passes it on.",
+   "do": "js:setTimeout(S3, 0)",
+   "settle_ms": 500
+  },
+  {
+   "say": "Everyone after that is a cache hit: served from a few miles away in about twenty milliseconds, and your origin never sees the request.",
+   "do": "js:setTimeout(S4, 0)",
+   "settle_ms": 500
+  },
+  {
+   "say": "Each copy has a time to live, or TTL. When it runs out, the edge checks with the origin again. Long TTL, fewer origin trips. Short TTL, fresher content. Need it gone right now? Purge it.",
+   "do": "js:setTimeout(S5, 0)",
+   "settle_ms": 500
+  },
+  {
+   "say": "So what goes on a CDN? Anything that's the same for every visitor: pages, scripts, images, video, and slow-changing public data like a menu, cached for thirty seconds. Anything personal or that writes, like the cart or checkout, passes straight through.",
+   "do": "js:setTimeout(S6, 0)",
+   "settle_ms": 500
+  },
+  {
+   "say": "Now a real case. A bike shop gets shared on a forum: fifty thousand visitors in an hour, two megabytes each. That's a hundred gigabytes.",
+   "do": "js:setTimeout(S7, 0)",
+   "settle_ms": 500
+  },
+  {
+   "say": "Without a CDN, all hundred gigabytes come from two servers, and the site crawls for everyone, buyers included. With a CDN at a ninety-five percent hit rate, the edges send ninety-five gigabytes, and the origin just five: only the cart and checkout.",
+   "do": "js:setTimeout(S8, 0)",
+   "settle_ms": 500
+  },
+  {
+   "say": "Here's where it fits. DNS points the browser at the CDN. Static files are answered right at the edge. An order passes through to the load balancer, the API servers and the database. That's why it's spike defense number one: nearly free, and it removes most traffic before anything you have to scale.",
+   "do": "js:setTimeout(S9, 0)",
+   "settle_ms": 500
+  },
+  {
+   "say": "Two trade-offs to name. Visitors can see content up to one TTL old. And never cache personal pages, or the next visitor could see someone else's cart. One tip: lower your DNS TTL before a launch, so you can redirect traffic fast.",
+   "do": "js:setTimeout(S10, 0)",
+   "settle_ms": 500
+  },
+  {
+   "say": "In the interview, say it in one line: the CDN takes most of the read spike before it reaches us.",
+   "do": "js:setTimeout(S11, 0)",
+   "settle_ms": 500
+  }
+ ]
+}

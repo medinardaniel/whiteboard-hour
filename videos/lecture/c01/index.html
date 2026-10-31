@@ -1,0 +1,408 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="color-scheme" content="light">
+<title>CDN: lecture</title>
+<style>
+:root { --bg:#fbfaf7; --fg:#1d1d1f; --muted:#5f6368; --line:#e3e0d8; --card:#fff; --acc:#2456c7; --acc-soft:#e8eefb;
+        --good:#1a7f37; --bad:#cf222e; --warn:#bf8700; --land:#eef0f4; }
+* { box-sizing: border-box; }
+html, body { margin:0; width:1920px; height:1080px; overflow:hidden; background:var(--bg); color:var(--fg);
+  font-family: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+#__demo_cursor { display:none !important; }
+.scene { position:absolute; inset:0; opacity:0; pointer-events:none; transition: opacity .6s; }
+.scene.on { opacity:1; }
+.kicker { font-size:30px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:var(--acc); }
+svg text { font-family: inherit; }
+.ico { fill:none; stroke:var(--acc); stroke-width:1.7; stroke-linecap:round; stroke-linejoin:round; }
+
+/* title */
+#t0 { display:flex; flex-direction:column; justify-content:center; padding:0 160px; }
+#t0 h1 { font-size:200px; margin:10px 0 0; letter-spacing:-.02em; }
+#t0 .sub { font-size:64px; color:var(--muted); margin-top:-10px; }
+#t0 .row { display:flex; gap:28px; margin-top:70px; }
+#t0 .pill { font-size:36px; padding:12px 32px; border:3px solid var(--acc); color:var(--acc); border-radius:999px; }
+
+/* map */
+.caption { position:absolute; left:70px; top:56px; background:var(--card); border:2px solid var(--line); border-radius:18px;
+  padding:22px 34px; font-size:44px; font-weight:700; box-shadow:0 6px 20px rgba(0,0,0,.06); transition: all .4s; max-width:900px; }
+.caption small { display:block; font-size:30px; font-weight:500; color:var(--muted); margin-top:6px; }
+.node rect.box { fill:var(--card); stroke:var(--acc); stroke-width:3; }
+.node.edge rect.box { stroke:var(--good); }
+.node.edge .ico { stroke:var(--good); }
+.node text { font-size:24px; text-anchor:middle; fill:var(--fg); font-weight:600; }
+.node text.sm { font-size:20px; font-weight:500; fill:var(--muted); }
+.pop { transform-box: fill-box; transform-origin:center; transform: scale(0); transition: transform .5s cubic-bezier(.3,1.5,.5,1); }
+.pop.in { transform: scale(1); }
+.tag { font-size:26px; font-weight:800; text-anchor:middle; }
+.region { fill:var(--land); }
+.region-label { font-size:26px; fill:#9aa0a6; text-anchor:middle; letter-spacing:.08em; font-weight:700; }
+
+/* sort */
+#t6 h2, #t7 h2, #t8 h2, #t9 h2, #t10 h2 { position:absolute; left:110px; top:60px; margin:0; font-size:60px; }
+.bin { position:absolute; top:220px; width:780px; height:780px; border-radius:28px; border:4px dashed; padding:26px 34px; }
+.bin h3 { margin:0; font-size:40px; }
+.bin.edge { left:110px; border-color:var(--good); background:#eef7f0; } .bin.edge h3 { color:var(--good); }
+.bin.pass { right:110px; border-color:var(--acc); background:var(--acc-soft); } .bin.pass h3 { color:var(--acc); }
+.chip { position:absolute; font-size:38px; font-weight:600; padding:14px 28px; border-radius:16px; background:var(--card);
+  border:3px solid var(--line); white-space:nowrap; transition: left .9s cubic-bezier(.4,0,.2,1), top .9s cubic-bezier(.4,0,.2,1), border-color .9s; }
+.chip.g { border-color:var(--good); } .chip.b { border-color:var(--acc); }
+.chip i { font-style:normal; font-size:28px; color:var(--muted); font-weight:500; }
+
+/* numbers */
+#t7 .eq { position:absolute; top:330px; left:0; right:0; display:flex; justify-content:center; align-items:center; gap:50px; }
+.big { text-align:center; } .big b { display:block; font-size:150px; line-height:1; } .big span { font-size:40px; color:var(--muted); }
+.op { font-size:110px; color:var(--muted); }
+.big.res b { color:var(--bad); }
+
+/* bars */
+.chart { position:absolute; top:200px; width:760px; height:800px; }
+.chart h3 { margin:0 0 10px; font-size:44px; text-align:center; }
+.chart .axis { position:absolute; left:80px; right:80px; bottom:120px; border-bottom:4px solid var(--muted); }
+.bar { position:absolute; bottom:124px; width:220px; height:0; border-radius:14px 14px 0 0; transition: height 1.6s cubic-bezier(.4,0,.2,1); }
+.bar .v { position:absolute; top:-64px; left:0; right:0; text-align:center; font-size:46px; font-weight:800; }
+.bar-l { position:absolute; bottom:50px; width:220px; text-align:center; font-size:32px; color:var(--muted); font-weight:600; }
+.limit { position:absolute; left:60px; right:60px; border-top:4px dashed var(--bad); }
+.limit { z-index:2; } .limit span { position:absolute; right:0; top:-46px; background:var(--bg); padding:0 8px; font-size:30px; color:var(--bad); font-weight:700; }
+@keyframes throb { 50% { filter: brightness(1.25); transform: translateX(-4px); } }
+.over { animation: throb .5s infinite; }
+
+/* trade-offs */
+.cards { position:absolute; top:230px; left:110px; right:110px; display:grid; grid-template-columns:repeat(3,1fr); gap:44px; }
+.card { background:var(--card); border:3px solid var(--line); border-radius:26px; padding:44px 40px; font-size:42px; line-height:1.3;
+  opacity:0; transform: translateY(30px); transition: all .6s; }
+.card.in { opacity:1; transform:none; }
+.card svg { width:96px; height:96px; display:block; margin-bottom:22px; }
+.card b { display:block; font-size:48px; margin-bottom:12px; }
+
+/* say */
+#t11 { display:flex; flex-direction:column; justify-content:center; padding:0 160px; }
+#t11 .bubble { font-size:84px; font-weight:800; line-height:1.2; border:6px solid var(--acc); border-radius:60px 60px 60px 12px; padding:70px 80px; }
+#t11 .kicker { margin-bottom:30px; }
+</style>
+</head>
+<body>
+
+<!-- 0 · title -->
+<section class="scene on" id="t0">
+  <div class="kicker">Component 1 of 23 · Version 1</div>
+  <h1>CDN</h1>
+  <div class="sub">Content delivery network</div>
+  <div class="row"><span class="pill">First box after the browser</span><span class="pill">Spike defense #1</span></div>
+</section>
+
+<!-- 1-5 · map -->
+<section class="scene" id="map">
+  <svg id="mapsvg" width="1920" height="1080" viewBox="0 0 1920 1080">
+    <defs><pattern id="dots" width="34" height="34" patternUnits="userSpaceOnUse"><circle cx="2" cy="2" r="2" fill="#e4e1da"/></pattern></defs>
+    <rect width="1920" height="1080" fill="url(#dots)"/>
+    <ellipse class="region" cx="470" cy="470" rx="330" ry="230"/><text class="region-label" x="330" y="300">NORTH AMERICA</text>
+    <ellipse class="region" cx="1060" cy="330" rx="210" ry="170"/><text class="region-label" x="1000" y="480">EUROPE</text>
+    <ellipse class="region" cx="1580" cy="360" rx="260" ry="200"/><text class="region-label" x="1700" y="545">ASIA</text>
+    <ellipse class="region" cx="1620" cy="860" rx="230" ry="150"/><text class="region-label" x="1620" y="1000">AUSTRALIA</text>
+    <ellipse class="region" cx="720" cy="840" rx="180" ry="190"/><text class="region-label" x="720" y="1010">SOUTH AMERICA</text>
+    <g id="arcs"></g><g id="nodes"></g><g id="fx"></g>
+  </svg>
+  <div class="caption" id="cap">The problem<small>Every file crosses the ocean</small></div>
+</section>
+
+<!-- 6 · sort -->
+<section class="scene" id="t6">
+  <h2>What goes on a CDN?</h2>
+  <div class="bin edge"><h3>✓ Cache at the edge</h3></div>
+  <div class="bin pass"><h3>→ Pass through to your servers</h3></div>
+  <div id="chips"></div>
+</section>
+
+<!-- 7 · numbers -->
+<section class="scene" id="t7">
+  <h2>The bike shop goes viral</h2>
+  <div class="eq">
+    <div class="big"><b id="n1">0</b><span>visitors in an hour</span></div>
+    <div class="op">×</div>
+    <div class="big"><b>2 MB</b><span>per visit</span></div>
+    <div class="op">=</div>
+    <div class="big res"><b id="n2">0 GB</b><span>in one hour</span></div>
+  </div>
+</section>
+
+<!-- 8 · bars -->
+<section class="scene" id="t8">
+  <h2>Who sends the 100 GB?</h2>
+  <div class="chart" style="left:110px"><h3>Without a CDN</h3>
+    <div class="bar" id="b1" style="left:270px;background:var(--bad)"><div class="v">100 GB</div></div>
+    <div class="bar-l" style="left:270px">Your servers</div><div class="axis"></div><div class="limit" style="bottom:420px"><span>what 2 servers can send</span></div></div>
+  <div class="chart" style="right:110px"><h3>With a CDN (95% hit rate)</h3>
+    <div class="bar" id="b2" style="left:130px;background:var(--good)"><div class="v">95 GB</div></div>
+    <div class="bar" id="b3" style="left:410px;background:var(--acc)"><div class="v">5 GB</div></div>
+    <div class="bar-l" style="left:130px">Edge servers</div><div class="bar-l" style="left:410px">Your servers</div><div class="axis"></div></div>
+</section>
+
+<!-- 9 · architecture -->
+<section class="scene" id="t9">
+  <h2>Where it fits</h2>
+  <svg id="archsvg" width="1920" height="1080" viewBox="0 0 1920 1080"><g id="aarcs"></g><g id="anodes"></g><g id="afx"></g></svg>
+</section>
+
+<!-- 10 · trade-offs -->
+<section class="scene" id="t10">
+  <h2>Trade-offs to name</h2>
+  <div class="cards">
+    <div class="card" id="k1"><svg viewBox="0 0 24 24" class="ico" style="stroke:var(--warn)"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.5 2"/></svg><b>Stale up to one TTL</b>A visitor can see a copy that's a little old.</div>
+    <div class="card" id="k2"><svg viewBox="0 0 24 24" class="ico" style="stroke:var(--bad)"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7.5a4 4 0 0 1 8 0V11"/></svg><b>Never cache personal pages</b>Or the next visitor sees someone else's cart.</div>
+    <div class="card" id="k3"><svg viewBox="0 0 24 24" class="ico"><path d="M12 3v18M5 5h11l3 2.5-3 2.5H5zM19 12H8l-3 2.5 3 2.5h11z"/></svg><b>Lower DNS TTL first</b>Before launch, so you can redirect traffic fast.</div>
+  </div>
+</section>
+
+<!-- 11 · say -->
+<section class="scene" id="t11">
+  <div class="kicker">In the interview, say</div>
+  <div class="bubble">"The CDN takes most of the read spike before it reaches us."</div>
+</section>
+
+<script>
+const NS = 'http://www.w3.org/2000/svg';
+const ICON = {
+  user: '<circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-6 8-6s8 2 8 6"/>',
+  users: '<circle cx="9" cy="8" r="3.3"/><path d="M2.5 20c0-3.5 3-5.3 6.5-5.3s6.5 1.8 6.5 5.3"/><path d="M15.5 4.9a3.3 3.3 0 0 1 0 6.3M17.5 14.9c2.3.6 4 2.3 4 5.1"/>',
+  server: '<rect x="4" y="3.5" width="16" height="7.5" rx="1.5"/><rect x="4" y="13" width="16" height="7.5" rx="1.5"/><path d="M8 7.25h.01M8 16.75h.01"/>',
+  globe: '<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3.2 3 3.2 15 0 18M12 3c-3.2 3-3.2 15 0 18"/>',
+  db: '<ellipse cx="12" cy="5.5" rx="7.5" ry="2.6"/><path d="M4.5 5.5v13c0 1.4 3.4 2.6 7.5 2.6s7.5-1.2 7.5-2.6v-13"/><path d="M4.5 12c0 1.4 3.4 2.6 7.5 2.6s7.5-1.2 7.5-2.6"/>',
+  split: '<circle cx="5" cy="12" r="2.2"/><path d="M7.2 12H11M11 12l8-6.5M11 12h8M11 12l8 6.5"/>',
+  signpost: '<path d="M12 3v18M5 5h11l3 2.5-3 2.5H5zM19 12H8l-3 2.5 3 2.5h11z"/>',
+  browser: '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18"/><path d="M6 6.5h.01M8.5 6.5h.01"/>',
+  photo: '<rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="8.5" cy="10" r="1.6"/><path d="M21 16l-5-5-8 8"/>',
+};
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+const el = (tag, attrs, parent) => { const e = document.createElementNS(NS, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); if (parent) parent.append(e); return e; };
+
+function node(parent, x, y, icon, label, sub, cls = '', w = 150, h = 130) {
+  const outer = el('g', { transform: `translate(${x - w / 2},${y - h / 2})` }, parent);
+  const g = el('g', { class: 'node ' + cls }, outer);
+  el('rect', { class: 'box', width: w, height: h, rx: 18 }, g);
+  const ic = el('g', { class: 'ico', transform: `translate(${w / 2 - 24},14) scale(2)` }, g); ic.innerHTML = ICON[icon];
+  el('text', { x: w / 2, y: 90 }, g).textContent = label;
+  if (sub) el('text', { x: w / 2, y: 116, class: 'sm' }, g).textContent = sub;
+  return g;
+}
+
+function packet(layer, a, b, { dur = 1100, color = '#2456c7', r = 11, curve = 0 } = {}) {
+  return new Promise(res => {
+    const c = el('circle', { r, fill: color }, layer);
+    const mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2 - curve, t0 = performance.now();
+    (function step() {
+      const p = Math.min(1, (performance.now() - t0) / dur), e = p < .5 ? 2 * p * p : 1 - Math.pow(-2 * p + 2, 2) / 2;
+      c.setAttribute('cx', (1 - e) ** 2 * a.x + 2 * (1 - e) * e * mx + e * e * b.x);
+      c.setAttribute('cy', (1 - e) ** 2 * a.y + 2 * (1 - e) * e * my + e * e * b.y);
+      if (p < 1) requestAnimationFrame(step); else { c.remove(); res(); }
+    })(performance.now());
+  });
+}
+
+function floatTag(layer, x, y, text, color) {
+  const t = el('text', { x, y, class: 'tag', fill: color, opacity: 1 }, layer);
+  t.textContent = text;
+  t.animate([{ transform: 'translateY(0)', opacity: 1 }, { transform: 'translateY(-50px)', opacity: 0 }], { duration: 1400, easing: 'ease-out' });
+  setTimeout(() => t.remove(), 1400);
+}
+
+function show(id) { document.querySelectorAll('.scene').forEach(s => s.classList.toggle('on', s.id === id)); }
+function cap(title, sub) { const c = document.getElementById('cap'); c.innerHTML = `${title}<small>${sub}</small>`; }
+
+/* ---- map ---- */
+const O = { x: 470, y: 470 };
+const CITIES = {
+  london: { u: { x: 1000, y: 230 }, e: { x: 1120, y: 390 }, name: 'London' },
+  tokyo: { u: { x: 1700, y: 270 }, e: { x: 1510, y: 420 }, name: 'Tokyo' },
+  sydney: { u: { x: 1740, y: 850 }, e: { x: 1500, y: 860 }, name: 'Sydney' },
+  sao: { u: { x: 640, y: 780 }, e: { x: 820, y: 900 }, name: 'São Paulo' },
+};
+const M = {};
+let loop = null, hits = 0, load = 0;
+function setLoad(v) {
+  load = Math.max(0, Math.min(1, v));
+  M.loadBar.setAttribute('width', 260 * load);
+  M.loadBar.setAttribute('fill', load > .75 ? 'var(--bad)' : load > .4 ? 'var(--warn)' : 'var(--good)');
+  M.loadTxt.textContent = load > .75 ? 'overloaded' : load > .4 ? 'busy' : 'calm';
+}
+function buildMap() {
+  const arcs = document.getElementById('arcs'), nodes = document.getElementById('nodes');
+  M.fx = document.getElementById('fx');
+  for (const k in CITIES) {
+    const c = CITIES[k];
+    M[k + 'Arc'] = el('path', { d: `M${O.x},${O.y} Q${(O.x + c.u.x) / 2},${Math.min(O.y, c.u.y) - 160} ${c.u.x},${c.u.y}`, fill: 'none', stroke: '#c9ced8', 'stroke-width': 3, 'stroke-dasharray': '8 10' }, arcs);
+    M[k + 'U'] = node(nodes, c.u.x, c.u.y, 'users', c.name, 'visitors', '', 150, 130);
+    const eg = node(nodes, c.e.x, c.e.y, 'globe', 'Edge', c.name, 'edge pop', 150, 130);
+    M[k + 'E'] = eg;
+  }
+  node(nodes, O.x, O.y, 'server', 'Your servers', 'Virginia: the origin', '', 230, 140);
+  const lg = el('g', { transform: `translate(${O.x - 130},${O.y + 92})` }, nodes);
+  el('rect', { width: 260, height: 22, rx: 11, fill: '#e3e0d8' }, lg);
+  M.loadBar = el('rect', { width: 0, height: 22, rx: 11, fill: 'var(--good)' }, lg);
+  M.loadTxt = el('text', { x: 130, y: 56, class: 'tag', fill: 'var(--muted)', style: 'font-size:24px' }, lg);
+  M.latency = el('text', { x: 1180, y: 610, class: 'tag', fill: 'var(--bad)', opacity: 0, style: 'font-size:34px' }, M.fx);
+  M.latency.textContent = '~200 ms round trip, every file';
+  M.hitTxt = el('text', { x: 1500, y: 1050, class: 'tag', fill: 'var(--good)', opacity: 0, style: 'font-size:34px' }, M.fx);
+  setLoad(0);
+}
+buildMap();
+
+window.S1 = () => {
+  show('map'); cap('The problem', 'One origin, visitors everywhere: every file crosses the ocean');
+  M.latency.setAttribute('opacity', 1);
+  const keys = Object.keys(CITIES);
+  let n = 0;
+  loop = setInterval(() => {
+    const c = CITIES[keys[n++ % keys.length]];
+    packet(M.fx, O, c.u, { dur: 1700, color: '#cf222e', r: 10, curve: 160 });
+    setLoad(load + 0.03);
+  }, 260);
+};
+window.S2 = () => {
+  clearInterval(loop); M.latency.setAttribute('opacity', 0);
+  cap('The fix: edge servers', 'Copies of your files, close to your users');
+  Object.keys(CITIES).forEach((k, i) => setTimeout(() => M[k + 'E'].classList.add('in'), 300 + i * 450));
+  for (const k in CITIES) M[k + 'Arc'].setAttribute('opacity', .35);
+  setLoad(.85);
+};
+window.S3 = async () => {
+  cap('Cache miss', 'The first request goes to the origin once');
+  const c = CITIES.sydney;
+  await packet(M.fx, c.u, c.e, { dur: 800, color: '#2456c7' });
+  floatTag(M.fx, c.e.x, c.e.y - 85, 'MISS', 'var(--bad)');
+  await sleep(500);
+  await packet(M.fx, c.e, O, { dur: 1700, color: '#bf8700', curve: 220 });
+  await packet(M.fx, O, c.e, { dur: 1700, color: '#bf8700', curve: 220 });
+  const badge = el('g', { transform: `translate(${c.e.x + 50},${c.e.y - 95})` }, M.fx);
+  el('rect', { width: 120, height: 44, rx: 22, fill: 'var(--good)' }, badge);
+  el('text', { x: 60, y: 31, class: 'tag', fill: '#fff', style: 'font-size:24px' }, badge).textContent = 'cached';
+  M.badge = badge;
+  await packet(M.fx, c.e, c.u, { dur: 800, color: '#1a7f37' });
+};
+window.S4 = () => {
+  cap('Cache hit', 'Served nearby in ~20 ms. The origin never sees it');
+  M.hitTxt.setAttribute('opacity', 1);
+  for (const k in CITIES) {
+    if (!M[k + 'E'].querySelector('.cb') && k !== 'sydney') {
+      const c = CITIES[k], b = el('g', { class: 'cb', transform: `translate(${c.e.x + 50},${c.e.y - 95})` }, M.fx);
+      el('rect', { width: 120, height: 44, rx: 22, fill: 'var(--good)' }, b);
+      el('text', { x: 60, y: 31, class: 'tag', fill: '#fff', style: 'font-size:24px' }, b).textContent = 'cached';
+    }
+  }
+  const keys = Object.keys(CITIES); let n = 0;
+  loop = setInterval(() => {
+    const c = CITIES[keys[n++ % keys.length]];
+    packet(M.fx, c.e, c.u, { dur: 450, color: '#1a7f37', r: 10 });
+    hits += 1; M.hitTxt.textContent = `${hits * 25} cache hits, 0 trips to the origin`;
+    setLoad(load - 0.04);
+  }, 160);
+};
+window.S5 = async () => {
+  clearInterval(loop);
+  cap('TTL: time to live', 'When a copy expires, the edge checks again');
+  const c = CITIES.sydney, R = 74, C = 2 * Math.PI * R;
+  const ring = el('circle', { cx: c.e.x, cy: c.e.y, r: R + 20, fill: 'none', stroke: 'var(--warn)', 'stroke-width': 10,
+    'stroke-dasharray': C * 1.27, 'stroke-dashoffset': 0, transform: `rotate(-90 ${c.e.x} ${c.e.y})` }, M.fx);
+  const lbl = el('text', { x: c.e.x, y: c.e.y - 125, class: 'tag', fill: 'var(--warn)', style: 'font-size:30px' }, M.fx);
+  lbl.textContent = 'TTL 30 s';
+  ring.animate([{ strokeDashoffset: 0 }, { strokeDashoffset: C * 1.27 }], { duration: 5200, fill: 'forwards', easing: 'linear' });
+  await sleep(5300);
+  lbl.textContent = 'expired: check origin';
+  await packet(M.fx, c.e, O, { dur: 1400, color: '#bf8700', curve: 220 });
+  await packet(M.fx, O, c.e, { dur: 1400, color: '#bf8700', curve: 220 });
+  ring.animate([{ strokeDashoffset: C * 1.27 }, { strokeDashoffset: 0 }], { duration: 600, fill: 'forwards' });
+  lbl.textContent = 'fresh again: TTL 30 s';
+  await sleep(1500);
+  const pg = el('g', { transform: `translate(${c.e.x - 120},${c.e.y + 95})` }, M.fx);
+  el('rect', { width: 240, height: 54, rx: 27, fill: 'var(--bad)' }, pg);
+  el('text', { x: 120, y: 37, class: 'tag', fill: '#fff', style: 'font-size:28px' }, pg).textContent = 'PURGE: drop now';
+};
+
+/* ---- sort ---- */
+const ITEMS = [
+  ['index.html', 'g'], ['app.js', 'g'], ['styles.css', 'g'], ['photo.jpg', 'g'], ['promo.mp4', 'g'],
+  ['menu.json <i>(30 s)</i>', 'g'], ['GET /cart', 'b'], ['POST /checkout', 'b'], ['POST /login', 'b'], ['GET /my-orders', 'b'],
+];
+window.S6 = () => {
+  show('t6');
+  const box = document.getElementById('chips'); box.innerHTML = '';
+  const chips = ITEMS.map(([t], i) => { const d = document.createElement('div'); d.className = 'chip'; d.innerHTML = t;
+    d.style.left = '880px'; d.style.top = '1120px'; box.append(d); return d; });
+  let gi = 0, bi = 0;
+  ITEMS.forEach(([, k], i) => setTimeout(() => {
+    const c = chips[i]; c.classList.add(k);
+    if (k === 'g') { c.style.left = (150 + (gi % 2) * 360) + 'px'; c.style.top = (320 + Math.floor(gi / 2) * 110) + 'px'; gi++; }
+    else { c.style.left = (1180 + (bi % 2) * 340) + 'px'; c.style.top = (320 + Math.floor(bi / 2) * 110) + 'px'; bi++; }
+  }, 900 + i * (i < 6 ? 1500 : 1300)));
+};
+
+/* ---- numbers ---- */
+function countTo(id, to, fmt, ms) {
+  const e = document.getElementById(id), t0 = performance.now();
+  (function step() { const p = Math.min(1, (performance.now() - t0) / ms); e.textContent = fmt(Math.round(to * p)); if (p < 1) requestAnimationFrame(step); })(performance.now());
+  setTimeout(() => { e.textContent = fmt(to); }, ms + 60);
+}
+window.S7 = async () => {
+  show('t7');
+  countTo('n1', 50000, v => v.toLocaleString(), 2200);
+  await sleep(3200);
+  countTo('n2', 100, v => v + ' GB', 1500);
+};
+window.S8 = async () => {
+  show('t8');
+  await sleep(500);
+  const b1 = document.getElementById('b1'); b1.style.height = '540px';
+  setTimeout(() => b1.classList.add('over'), 1700);
+  await sleep(6500);
+  document.getElementById('b2').style.height = '513px';
+  await sleep(1200);
+  document.getElementById('b3').style.height = '27px';
+};
+
+/* ---- architecture ---- */
+const A = {};
+function buildArch() {
+  const n = document.getElementById('anodes'), a = document.getElementById('aarcs');
+  const P = { br: { x: 200, y: 560 }, dns: { x: 520, y: 300 }, cdn: { x: 640, y: 560 }, lb: { x: 1020, y: 560 }, api: { x: 1360, y: 560 }, db: { x: 1720, y: 560 } };
+  A.P = P;
+  const line = (p, q, dash) => el('line', { x1: p.x, y1: p.y, x2: q.x, y2: q.y, stroke: '#b8bfcc', 'stroke-width': 5, 'stroke-dasharray': dash || '' }, a);
+  line(P.br, P.dns, '10 10'); line(P.br, P.cdn); line(P.cdn, P.lb); line(P.lb, P.api); line(P.api, P.db);
+  node(n, P.br.x, P.br.y, 'browser', 'Browser', '', '', 190, 150);
+  node(n, P.dns.x, P.dns.y, 'signpost', 'DNS', 'pizza.com → CDN', '', 230, 150);
+  A.cdn = node(n, P.cdn.x, P.cdn.y, 'globe', 'CDN', 'edge servers', 'edge', 210, 150);
+  node(n, P.lb.x, P.lb.y, 'split', 'Load balancer', '', '', 230, 150);
+  node(n, P.api.x, P.api.y, 'server', 'API', '2+ copies', '', 190, 150);
+  node(n, P.db.x, P.db.y, 'db', 'Database', '', '', 210, 150);
+  const lab = el('text', { x: P.cdn.x, y: P.cdn.y + 130, class: 'tag', fill: 'var(--good)', style: 'font-size:32px' }, n);
+  lab.textContent = 'Spike defense #1';
+  A.fx = document.getElementById('afx');
+  A.l1 = el('text', { x: 960, y: 820, class: 'tag', fill: 'var(--good)', opacity: 0, style: 'font-size:40px' }, A.fx);
+  A.l1.textContent = 'GET photo.jpg: answered at the edge';
+  A.l2 = el('text', { x: 960, y: 900, class: 'tag', fill: 'var(--acc)', opacity: 0, style: 'font-size:40px' }, A.fx);
+  A.l2.textContent = 'POST /orders: passes through to your servers';
+}
+buildArch();
+window.S9 = async () => {
+  show('t9');
+  const P = A.P;
+  await sleep(1200);
+  await packet(A.fx, P.br, P.dns, { dur: 700, color: '#5f6368' }); await packet(A.fx, P.dns, P.br, { dur: 700, color: '#5f6368' });
+  await sleep(1200);
+  A.l1.setAttribute('opacity', 1);
+  await packet(A.fx, P.br, P.cdn, { dur: 800, color: '#1a7f37' }); await packet(A.fx, P.cdn, P.br, { dur: 800, color: '#1a7f37' });
+  await sleep(1400);
+  A.l2.setAttribute('opacity', 1);
+  for (const [p, q] of [[P.br, P.cdn], [P.cdn, P.lb], [P.lb, P.api], [P.api, P.db]]) await packet(A.fx, p, q, { dur: 650, color: '#2456c7' });
+  for (const [p, q] of [[P.db, P.api], [P.api, P.lb], [P.lb, P.cdn], [P.cdn, P.br]]) await packet(A.fx, p, q, { dur: 500, color: '#2456c7' });
+};
+
+/* ---- trade-offs and close ---- */
+window.S10 = () => {
+  show('t10');
+  ['k1', 'k2', 'k3'].forEach((id, i) => setTimeout(() => document.getElementById(id).classList.add('in'), 300 + [0, 4200, 9800][i]));
+};
+window.S11 = () => show('t11');
+</script>
+</body>
+</html>
