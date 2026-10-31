@@ -5,74 +5,142 @@
   1080
  ],
  "voice": "en-US-AndrewMultilingualNeural",
- "rate": "+4%",
+ "rate": "+6%",
  "pronounce": {
   "CDN": "C D N",
   "TTL": "T T L",
   "DNS": "D N S",
   "API": "A P I"
  },
- "load_ms": 1500,
+ "load_ms": 1200,
  "gap_ms": 400,
- "tail_ms": 1800,
+ "tail_ms": 1500,
  "cues": [
   {
-   "say": "This is the CDN, the content delivery network. It's usually the first box you draw after the browser, and it's the cheapest way to survive a traffic spike."
+   "say": "Component one: the CDN.",
+   "post_ms": 900
   },
   {
-   "say": "Start with the problem. Your site runs on two servers in Virginia. A visitor in Sydney opens the homepage, about two megabytes of pages, scripts and photos, and every file crosses the Pacific and back. Now picture fifty thousand visitors, and your two servers sending the same files to every one.",
+   "say": "A CDN, or content delivery network, is a network of servers spread across hundreds of cities. Each one keeps copies of your website's files, and serves every visitor from the closest one.",
+   "post_ms": 1200,
+   "do": "js:setTimeout(SD, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "You don't build it. You rent it, from a provider like Cloudflare, Akamai or Amazon CloudFront.",
+   "post_ms": 1100,
+   "do": "js:setTimeout(SD2, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "Why does it matter? Picture your site on two servers in Virginia. A visitor in Sydney loads your homepage, and every file crosses the Pacific and back.",
+   "post_ms": 900,
    "do": "js:setTimeout(S1, 0)",
-   "settle_ms": 500
+   "settle_ms": 350
   },
   {
-   "say": "A CDN puts copies of your files close to your users. It's a network of edge servers in hundreds of cities. Your own servers become the origin, the source those copies come from.",
+   "say": "Multiply that by fifty thousand visitors, all pulling the same files from two servers.",
+   "post_ms": 1100
+  },
+  {
+   "say": "With a CDN, copies sit on edge servers near your users. Your servers become the origin, the source of the copies.",
+   "post_ms": 1200,
    "do": "js:setTimeout(S2, 0)",
-   "settle_ms": 500
+   "settle_ms": 350
   },
   {
-   "say": "The first visitor in Sydney asks the nearby edge for a photo. It doesn't have it yet. That's a cache miss. So the edge fetches it from the origin once, keeps a copy, and passes it on.",
+   "say": "The first visitor in Sydney asks the nearby edge for a photo. The edge doesn't have it yet. That's a cache miss.",
+   "post_ms": 700,
    "do": "js:setTimeout(S3, 0)",
-   "settle_ms": 500
+   "settle_ms": 350
   },
   {
-   "say": "Everyone after that is a cache hit: served from a few miles away in about twenty milliseconds, and your origin never sees the request.",
+   "say": "So it fetches the photo from the origin once, keeps a copy, and passes it on.",
+   "post_ms": 1100,
+   "do": "js:setTimeout(S3b, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "Everyone after that is a cache hit, served nearby in about twenty milliseconds. The origin never sees them.",
+   "post_ms": 1100,
    "do": "js:setTimeout(S4, 0)",
-   "settle_ms": 500
+   "settle_ms": 350
   },
   {
-   "say": "Each copy has a time to live, or TTL. When it runs out, the edge checks with the origin again. Long TTL, fewer origin trips. Short TTL, fresher content. Need it gone right now? Purge it.",
+   "say": "Each copy has a time to live, or TTL. When it runs out, the edge checks with the origin for a fresh copy.",
+   "post_ms": 800,
    "do": "js:setTimeout(S5, 0)",
-   "settle_ms": 500
+   "settle_ms": 350
   },
   {
-   "say": "So what goes on a CDN? Anything that's the same for every visitor: pages, scripts, images, video, and slow-changing public data like a menu, cached for thirty seconds. Anything personal or that writes, like the cart or checkout, passes straight through.",
+   "say": "Need a change out right now? You purge the copy.",
+   "post_ms": 1100,
+   "do": "js:setTimeout(S5b, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "So what belongs on a CDN? Anything that's the same for every visitor: pages, scripts, images, video, even a menu cached for thirty seconds.",
+   "post_ms": 800,
    "do": "js:setTimeout(S6, 0)",
-   "settle_ms": 500
+   "settle_ms": 350
+  },
+  {
+   "say": "Anything personal or that writes, like the cart or checkout, passes straight through.",
+   "post_ms": 1100,
+   "do": "js:setTimeout(S6b, 0)",
+   "settle_ms": 350
   },
   {
    "say": "Now a real case. A bike shop gets shared on a forum: fifty thousand visitors in an hour, two megabytes each. That's a hundred gigabytes.",
+   "post_ms": 1100,
    "do": "js:setTimeout(S7, 0)",
-   "settle_ms": 500
+   "settle_ms": 350
   },
   {
-   "say": "Without a CDN, all hundred gigabytes come from two servers, and the site crawls for everyone, buyers included. With a CDN at a ninety-five percent hit rate, the edges send ninety-five gigabytes, and the origin just five: only the cart and checkout.",
+   "say": "Without a CDN, all of it comes from two servers, and the site crawls for everyone, buyers included.",
+   "post_ms": 800,
    "do": "js:setTimeout(S8, 0)",
-   "settle_ms": 500
+   "settle_ms": 350
   },
   {
-   "say": "Here's where it fits. DNS points the browser at the CDN. Static files are answered right at the edge. An order passes through to the load balancer, the API servers and the database. That's why it's spike defense number one: nearly free, and it removes most traffic before anything you have to scale.",
+   "say": "With a CDN at a ninety-five percent hit rate, the edges send ninety-five gigabytes. The origin sends just five.",
+   "post_ms": 1100,
+   "do": "js:setTimeout(S8b, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "Here's where it sits. DNS points the browser at the CDN, and static files are answered at the edge.",
+   "post_ms": 700,
    "do": "js:setTimeout(S9, 0)",
-   "settle_ms": 500
+   "settle_ms": 350
   },
   {
-   "say": "Two trade-offs to name. Visitors can see content up to one TTL old. And never cache personal pages, or the next visitor could see someone else's cart. One tip: lower your DNS TTL before a launch, so you can redirect traffic fast.",
+   "say": "An order passes through to the load balancer, the API and the database.",
+   "post_ms": 900,
+   "do": "js:setTimeout(S9b, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "That's why it's spike defense number one: nearly free, and it removes most traffic first.",
+   "post_ms": 1100
+  },
+  {
+   "say": "Two trade-offs to name. Visitors can see content up to one TTL old.",
+   "post_ms": 700,
    "do": "js:setTimeout(S10, 0)",
-   "settle_ms": 500
+   "settle_ms": 350
+  },
+  {
+   "say": "And never cache personal pages, or the next visitor could see someone else's cart.",
+   "post_ms": 1200,
+   "do": "js:setTimeout(S10b, 0)",
+   "settle_ms": 350
   },
   {
    "say": "In the interview, say it in one line: the CDN takes most of the read spike before it reaches us.",
+   "post_ms": 600,
    "do": "js:setTimeout(S11, 0)",
-   "settle_ms": 500
+   "settle_ms": 350
   }
  ]
 }

@@ -24,6 +24,16 @@ svg text { font-family: inherit; }
 #t0 .row { display:flex; gap:28px; margin-top:70px; }
 #t0 .pill { font-size:36px; padding:12px 32px; border:3px solid var(--acc); color:var(--acc); border-radius:999px; }
 
+/* definition */
+#tdef .def-text { position:absolute; left:110px; top:0; bottom:0; width:860px; display:flex; flex-direction:column; justify-content:center; }
+#tdef p { font-size:58px; line-height:1.3; margin:22px 0 46px; }
+#tdef p b { color:var(--acc); }
+.rent { opacity:0; transform:translateY(20px); transition: all .6s; display:flex; flex-wrap:wrap; gap:16px; align-items:center; font-size:34px; }
+.rent.on { opacity:1; transform:none; }
+.rent span { font-weight:700; color:var(--muted); width:100%; }
+.rent em { font-style:normal; border:3px solid var(--acc); color:var(--acc); padding:8px 26px; border-radius:999px; font-weight:600; }
+#defsvg { position:absolute; left:960px; top:0; }
+
 /* map */
 .caption { position:absolute; left:70px; top:56px; background:var(--card); border:2px solid var(--line); border-radius:18px;
   padding:22px 34px; font-size:44px; font-weight:700; box-shadow:0 6px 20px rgba(0,0,0,.06); transition: all .4s; max-width:900px; }
@@ -69,7 +79,8 @@ svg text { font-family: inherit; }
 .over { animation: throb .5s infinite; }
 
 /* trade-offs */
-.cards { position:absolute; top:230px; left:110px; right:110px; display:grid; grid-template-columns:repeat(3,1fr); gap:44px; }
+.cards { position:absolute; top:260px; left:260px; right:260px; display:grid; grid-template-columns:repeat(2,1fr); gap:60px; }
+#k3 { display:none; }
 .card { background:var(--card); border:3px solid var(--line); border-radius:26px; padding:44px 40px; font-size:42px; line-height:1.3;
   opacity:0; transform: translateY(30px); transition: all .6s; }
 .card.in { opacity:1; transform:none; }
@@ -90,6 +101,14 @@ svg text { font-family: inherit; }
   <h1>CDN</h1>
   <div class="sub">Content delivery network</div>
   <div class="row"><span class="pill">First box after the browser</span><span class="pill">Spike defense #1</span></div>
+</section>
+
+<!-- definition -->
+<section class="scene" id="tdef">
+  <div class="def-text"><div class="kicker">What it is</div>
+    <p>A <b>network of servers</b> in hundreds of cities that keeps <b>copies of your files</b> and serves each visitor from the <b>closest one</b>.</p>
+    <div class="rent" id="rent"><span>You rent it, you don't build it:</span><em>Cloudflare</em><em>Akamai</em><em>Amazon CloudFront</em></div></div>
+  <svg id="defsvg" width="960" height="1080" viewBox="0 0 960 1080"><g id="dlines"></g><g id="dnodes"></g><g id="dfx"></g></svg>
 </section>
 
 <!-- 1-5 · map -->
@@ -269,9 +288,11 @@ window.S2 = () => {
 window.S3 = async () => {
   cap('Cache miss', 'The first request goes to the origin once');
   const c = CITIES.sydney;
-  await packet(M.fx, c.u, c.e, { dur: 800, color: '#2456c7' });
+  await packet(M.fx, c.u, c.e, { dur: 1200, color: '#2456c7' });
   floatTag(M.fx, c.e.x, c.e.y - 85, 'MISS', 'var(--bad)');
-  await sleep(500);
+};
+window.S3b = async () => {
+  const c = CITIES.sydney;
   await packet(M.fx, c.e, O, { dur: 1700, color: '#bf8700', curve: 220 });
   await packet(M.fx, O, c.e, { dur: 1700, color: '#bf8700', curve: 220 });
   const badge = el('g', { transform: `translate(${c.e.x + 50},${c.e.y - 95})` }, M.fx);
@@ -313,11 +334,33 @@ window.S5 = async () => {
   await packet(M.fx, O, c.e, { dur: 1400, color: '#bf8700', curve: 220 });
   ring.animate([{ strokeDashoffset: C * 1.27 }, { strokeDashoffset: 0 }], { duration: 600, fill: 'forwards' });
   lbl.textContent = 'fresh again: TTL 30 s';
-  await sleep(1500);
+};
+window.S5b = () => {
+  const c = CITIES.sydney;
   const pg = el('g', { transform: `translate(${c.e.x - 120},${c.e.y + 95})` }, M.fx);
   el('rect', { width: 240, height: 54, rx: 27, fill: 'var(--bad)' }, pg);
   el('text', { x: 120, y: 37, class: 'tag', fill: '#fff', style: 'font-size:28px' }, pg).textContent = 'PURGE: drop now';
 };
+
+/* ---- definition ---- */
+window.SD = () => {
+  show('tdef');
+  const L = document.getElementById('dlines'), N = document.getElementById('dnodes'), F = document.getElementById('dfx');
+  const C = { x: 480, y: 540 };
+  node(N, C.x, C.y, 'server', 'Your servers', 'the origin', '', 210, 140);
+  const cities = ['London', 'Frankfurt', 'Mumbai', 'Tokyo', 'Sydney', 'São Paulo', 'New York', 'Lagos'];
+  cities.forEach((name, i) => {
+    const a = -Math.PI / 2 + i * 2 * Math.PI / cities.length, q = { x: C.x + 340 * Math.cos(a), y: C.y + 390 * Math.sin(a) };
+    setTimeout(() => {
+      el('line', { x1: C.x, y1: C.y, x2: q.x, y2: q.y, stroke: '#c9ced8', 'stroke-width': 3, 'stroke-dasharray': '8 10' }, L);
+      packet(F, C, q, { dur: 700, color: '#1a7f37', r: 9 }).then(() => {
+        const g = node(N, q.x, q.y, 'globe', name, 'edge', 'edge pop', 150, 120);
+        requestAnimationFrame(() => requestAnimationFrame(() => g.classList.add('in')));
+      });
+    }, 700 + i * 600);
+  });
+};
+window.SD2 = () => document.getElementById('rent').classList.add('on');
 
 /* ---- sort ---- */
 const ITEMS = [
@@ -329,13 +372,22 @@ window.S6 = () => {
   const box = document.getElementById('chips'); box.innerHTML = '';
   const chips = ITEMS.map(([t], i) => { const d = document.createElement('div'); d.className = 'chip'; d.innerHTML = t;
     d.style.left = '880px'; d.style.top = '1120px'; box.append(d); return d; });
-  let gi = 0, bi = 0;
-  ITEMS.forEach(([, k], i) => setTimeout(() => {
-    const c = chips[i]; c.classList.add(k);
-    if (k === 'g') { c.style.left = (150 + (gi % 2) * 360) + 'px'; c.style.top = (320 + Math.floor(gi / 2) * 110) + 'px'; gi++; }
-    else { c.style.left = (1180 + (bi % 2) * 340) + 'px'; c.style.top = (320 + Math.floor(bi / 2) * 110) + 'px'; bi++; }
-  }, 900 + i * (i < 6 ? 1500 : 1300)));
+  window._chips = chips;
+  sortChips('g', 700);
 };
+function sortChips(kind, step) {
+  let n = 0;
+  ITEMS.forEach(([, k], i) => {
+    if (k !== kind) return;
+    const j = n++;
+    setTimeout(() => {
+      const c = window._chips[i]; c.classList.add(k);
+      if (k === 'g') { c.style.left = (150 + (j % 2) * 360) + 'px'; c.style.top = (320 + Math.floor(j / 2) * 110) + 'px'; }
+      else { c.style.left = (1180 + (j % 2) * 340) + 'px'; c.style.top = (320 + Math.floor(j / 2) * 110) + 'px'; }
+    }, 400 + j * step);
+  });
+}
+window.S6b = () => sortChips('b', 650);
 
 /* ---- numbers ---- */
 function countTo(id, to, fmt, ms) {
@@ -354,7 +406,8 @@ window.S8 = async () => {
   await sleep(500);
   const b1 = document.getElementById('b1'); b1.style.height = '540px';
   setTimeout(() => b1.classList.add('over'), 1700);
-  await sleep(6500);
+};
+window.S8b = async () => {
   document.getElementById('b2').style.height = '513px';
   await sleep(1200);
   document.getElementById('b3').style.height = '27px';
@@ -386,12 +439,14 @@ buildArch();
 window.S9 = async () => {
   show('t9');
   const P = A.P;
-  await sleep(1200);
+  await sleep(600);
   await packet(A.fx, P.br, P.dns, { dur: 700, color: '#5f6368' }); await packet(A.fx, P.dns, P.br, { dur: 700, color: '#5f6368' });
-  await sleep(1200);
+  await sleep(500);
   A.l1.setAttribute('opacity', 1);
   await packet(A.fx, P.br, P.cdn, { dur: 800, color: '#1a7f37' }); await packet(A.fx, P.cdn, P.br, { dur: 800, color: '#1a7f37' });
-  await sleep(1400);
+};
+window.S9b = async () => {
+  const P = A.P;
   A.l2.setAttribute('opacity', 1);
   for (const [p, q] of [[P.br, P.cdn], [P.cdn, P.lb], [P.lb, P.api], [P.api, P.db]]) await packet(A.fx, p, q, { dur: 650, color: '#2456c7' });
   for (const [p, q] of [[P.db, P.api], [P.api, P.lb], [P.lb, P.cdn], [P.cdn, P.br]]) await packet(A.fx, p, q, { dur: 500, color: '#2456c7' });
@@ -400,8 +455,10 @@ window.S9 = async () => {
 /* ---- trade-offs and close ---- */
 window.S10 = () => {
   show('t10');
-  ['k1', 'k2', 'k3'].forEach((id, i) => setTimeout(() => document.getElementById(id).classList.add('in'), 300 + [0, 4200, 9800][i]));
+  setTimeout(() => document.getElementById('k1').classList.add('in'), 300);
 };
+window.S10b = () => document.getElementById('k2').classList.add('in');
+window.S10c = () => document.getElementById('k3').classList.add('in');
 window.S11 = () => show('t11');
 </script>
 </body>
