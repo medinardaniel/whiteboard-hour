@@ -4,6 +4,18 @@
 
 Product names are listed as AWS / Azure / GCP / others.
 
+### The big picture
+
+```flow
+Users: browser or phone app
+1. Edge: DNS, CDN, WAF, load balancer
+2. Compute: stateless API, workers, jobs
+3. Database: the source of truth | 4. Cache: fast copies | 5. Queue: work for later
+7. Third parties: payments, SMS, email
+```
+
+Sections 6 and 8 to 11 wrap around all of it: correctness, reliability, observability, release and security.
+
 ---
 
 ## 1. Edge: everything before your servers
@@ -208,21 +220,40 @@ Product names are listed as AWS / Azure / GCP / others.
 
 ---
 
-## 12. The pizza-shop design, mapped to these parts
+## 12. The pizza-shop design, drawn
 
-| Part | Used for |
+```flow
+Browser
+CDN: site, photos, menu JSON for 30 s
+WAF and rate limits: per IP, 2 orders per phone
+Load balancer
+API: 2 instances, pre-scaled for the game
+Redis cache: slots, 2 s | Postgres: menu, slots, orders | Stripe checkout: webhooks, idempotency keys
+Queue + worker: texts and emails | Sweeper job: expired holds, checks Stripe first
+```
+
+Behind flags: a waiting room (off by default), pause orders, hide photos, close a slot.
+
+---
+
+## 13. Numbers to know
+
+| Fact | Value |
 |---|---|
-| CDN | Static site, photos, menu JSON cached 30 s |
-| WAF + rate limits | Per-IP limits at the edge; 2 orders per phone in the API |
-| Waiting room | Behind a flag, off by default |
-| Load balancer + stateless API | 2 instances normally, pre-scaled for the game |
-| Managed Postgres | Menu, slots, orders; conditional update guards capacity |
-| Connection pooler | Keeps scaled-out API instances from exhausting Postgres |
-| Cache | Slot availability, 2 s TTL |
-| Stripe hosted checkout + webhooks | Payment, with idempotency keys and event-id dedupe |
-| Queue + worker | Confirmation texts and emails |
-| Sweeper job | Releases expired holds, after checking Stripe |
-| Feature flags | Pause orders, waiting room, hide photos, close a slot |
-| Dashboards + alerts | Errors, p95, held vs paid, slots left, Stripe errors, DB connections |
+| Seconds in a day | 86,400, about 10^5 |
+| 1M events per day | about 12 per second on average |
+| Normal peak vs average | 2 to 3x |
+| One row | about 1 KB, so 1M rows is about 1 GB |
+| Managed Postgres, one primary | thousands of simple writes/s, tens of thousands of indexed reads/s |
+| Postgres connections | a few hundred max; use a pooler |
+| Redis, one node | about 100,000 ops/s, under 1 ms |
+| One stateless API instance | hundreds to a couple thousand simple requests/s |
+| Container autoscaling reaction | 1 to 5 minutes |
+| Payment provider call | 200 ms to over 1 s |
+| Stripe default rate limit (live) | about 100 requests/s; ask to raise it before a launch |
+
+See the [Components](components.html) page for what each building block is and when to use it.
+
+---
 
 See the [Framework](index.html) page for how to run the 60 minutes.

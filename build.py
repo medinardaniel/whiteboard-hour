@@ -11,6 +11,8 @@ import html
 import re
 from pathlib import Path
 
+import visuals
+
 ROOT = Path(__file__).parent
 PAGES = [
     ("framework.md", "index.html", "Framework"),
@@ -43,7 +45,15 @@ def cells(line):
     return [c.strip() for c in line.strip().strip("|").split("|")]
 
 
-def table(lines):
+def plain_title(cell):
+    m = re.search(r"\*\*(.+?)\*\*", cell)
+    return (m.group(1) if m else cell).strip()
+
+
+MISSING = []
+
+
+def table(lines, with_visuals=False):
     head = cells(lines[0])
     rows = [cells(l) for l in lines[2:]]
     if len(head) == 2:
@@ -64,7 +74,14 @@ def table(lines):
         dl = "".join(
             f"<dt>{inline(h)}</dt><dd>{inline(v)}</dd>" for h, v in fields if v
         )
-        out.append(f'<div class="card"><div class="card-title">{title}</div><dl>{dl}</dl></div>')
+        vis = ""
+        if with_visuals:
+            svg = visuals.visual_for(plain_title(r[0]))
+            if svg is None:
+                MISSING.append(plain_title(r[0]))
+            else:
+                vis = f'<div class="vis">{svg}</div>'
+        out.append(f'<div class="card"><div class="card-title">{title}</div>{vis}<dl>{dl}</dl></div>')
     out.append("</div>")
     return "".join(out)
 
@@ -76,7 +93,8 @@ def flow(lines):
         for b in line.split(" | "):
             name, _, detail = b.partition(": ")
             d = f'<span class="detail">{inline(detail)}</span>' if detail else ""
-            boxes.append(f'<div class="box"><strong>{inline(name)}</strong>{d}</div>')
+            ic = visuals.flow_icon(name)
+            boxes.append(f'<div class="box">{ic}<strong>{inline(name)}</strong>{d}</div>')
         rows.append(f'<div class="flow-row">{"".join(boxes)}</div>')
     return '<div class="flow">' + '<div class="arrow" aria-hidden="true">&darr;</div>'.join(rows) + "</div>"
 
@@ -92,7 +110,16 @@ def heading(level, text, toc):
     return f'<h{level} id="{hid}">{inline(text)}</h{level}>'
 
 
-def render(lines, toc):
+def timeline(lines):
+    segs = []
+    for l in lines:
+        num, name, mins = [x.strip() for x in l.split("|")]
+        segs.append(f'<div class="seg{" buf" if num == "-" else ""}" style="flex:{int(mins)}">'
+                    f'<b>{"" if num == "-" else num}</b><span>{mins}m</span></div>')
+    return f'<div class="tl">{"".join(segs)}</div>'
+
+
+def render(lines, toc, with_visuals=False):
     out, i = [], 0
     para = []
 
@@ -106,8 +133,9 @@ def render(lines, toc):
         s = line.strip()
         if not s:
             flush(); i += 1; continue
-        if s.startswith("::: answer"):
+        if s.startswith(":::") and s != ":::":
             flush()
+            kind, _, args = s[3:].strip().partition(" ")
             depth, j = 1, i + 1
             while j < len(lines):
                 t = lines[j].strip()
@@ -118,12 +146,19 @@ def render(lines, toc):
                     if depth == 0:
                         break
                 j += 1
-            inner = render(lines[i + 1 : j], [])
-            out.append(
-                '<details class="answer"><summary><span class="show">See answer</span>'
-                '<span class="hide">Hide answer</span></summary>'
-                f'<div class="answer-body">{inner}</div></details>'
-            )
+            inner = render(lines[i + 1 : j], [], with_visuals)
+            if kind == "answer":
+                out.append(
+                    '<details class="answer"><summary><span class="show">See answer</span>'
+                    '<span class="hide">Hide answer</span></summary>'
+                    f'<div class="answer-body">{inner}</div></details>'
+                )
+            elif kind == "phase":
+                num, name, mins = [x.strip() for x in args.split("|")]
+                out.append(f'<section class="phase" id="phase-{num}"><div class="phase-head"><span class="pn">{num}</span>'
+                           f'<span class="pname">{inline(name)}</span><span class="pmin">{inline(mins)}</span></div>{inner}</section>')
+            else:
+                out.append(f'<div class="{kind}">{inner}</div>')
             i = j + 1; continue
         if s.startswith("```"):
             flush()
@@ -132,7 +167,9 @@ def render(lines, toc):
             while not lines[j].strip().startswith("```"):
                 j += 1
             body = lines[i + 1 : j]
-            if lang == "flow":
+            if lang == "timeline":
+                out.append(timeline([b for b in body if b.strip()]))
+            elif lang == "flow":
                 out.append(flow([b for b in body if b.strip()]))
             else:
                 out.append("<pre><code>" + html.escape("\n".join(body)) + "</code></pre>")
@@ -149,7 +186,7 @@ def render(lines, toc):
             j = i
             while j < len(lines) and lines[j].strip().startswith("|"):
                 j += 1
-            out.append(table(lines[i:j]))
+            out.append(table(lines[i:j], with_visuals))
             i = j; continue
         if s.startswith("> "):
             flush()
@@ -247,12 +284,27 @@ details.answer > summary { display: none; }
 """
 
 
+def strip_dark(css):
+    """Drop every dark-mode block, so print always uses light colors."""
+    key = "@media (prefers-color-scheme: dark)"
+    while key in css:
+        start = css.index(key)
+        i, depth = css.index("{", start), 0
+        while True:
+            depth += {"{": 1, "}": -1}.get(css[i], 0)
+            i += 1
+            if depth == 0:
+                break
+        css = css[:start] + css[i:]
+    return css
+
+
 def build_print():
     """One printable HTML with every answer shown, for print/whiteboard-hour.pdf."""
     parts = []
     for src, _, label in PAGES:
         lines = (ROOT / "src" / src).read_text(encoding="utf-8").splitlines()
-        body = render(lines, [])
+        body = render(lines, [], src == "components.md")
         body = body.replace("<details class=\"answer\">", "<details class=\"answer\" open>")
         body = body.replace('<div class="answer-body">', '<div class="answer-body"><p class="answer-label">Answer</p>')
         if src == "questions.md":
@@ -267,7 +319,7 @@ def build_print():
         '<li><a href="#part-questions">Sample questions</a>: 8 prompts with worked answers, then 20 follow-up drills</li></ol></section>'
     )
     css = (ROOT / "style.css").read_text(encoding="utf-8")
-    css = re.sub(r"@media \(prefers-color-scheme: dark\) \{.*?\n\}\n", "", css, flags=re.S)
+    css = strip_dark(css)
     out = ROOT / "print"
     out.mkdir(exist_ok=True)
     (out / "whiteboard-hour.html").write_text(
@@ -282,10 +334,12 @@ def main():
     for src, dest, label in PAGES:
         lines = (ROOT / "src" / src).read_text(encoding="utf-8").splitlines()
         toc = []
-        body = render(lines, toc)
+        body = render(lines, toc, src == "components.md")
         (ROOT / dest).write_text(page(label, dest, body, toc), encoding="utf-8")
         print("wrote", dest)
     build_print()
+    if MISSING:
+        print("NO VISUAL:", sorted(set(MISSING)))
 
 
 if __name__ == "__main__":
