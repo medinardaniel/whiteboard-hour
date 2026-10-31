@@ -116,4 +116,4 @@ Postgres | Stripe: webhook back | Sweeper job
 
 **Red flags:** Kafka and microservices for a small shop, no numbers, no "why not X", no plan for oversell or double charge, stopping at the diagram.
 
-See [Components](components.html) for every building block, drawn, and the numbers to know.
+See [Components](components.html) for the 23 parts you need, drawn, and the numbers to know.

@@ -19,6 +19,9 @@ PAGES = [
     ("components.md", "components.html", "Components"),
     ("questions.md", "questions.html", "Questions"),
 ]
+# Built but not in the nav or the PDF.
+EXTRA_PAGES = [("reference.md", "reference.html", "All components")]
+VISUAL_PAGES = ("components.md", "reference.md")
 SITE = "Whiteboard Hour"
 
 
@@ -76,9 +79,10 @@ def table(lines, with_visuals=False):
         )
         vis = ""
         if with_visuals:
-            svg = visuals.visual_for(plain_title(r[0]))
+            key = plain_title(r[1] if numbered else r[0])
+            svg = visuals.visual_for(key)
             if svg is None:
-                MISSING.append(plain_title(r[0]))
+                MISSING.append(key)
             else:
                 vis = f'<div class="vis">{svg}</div>'
         out.append(f'<div class="card"><div class="card-title">{title}</div>{vis}<dl>{dl}</dl></div>')
@@ -316,7 +320,7 @@ def build_print():
     parts = []
     for src, _, label in PAGES:
         lines = (ROOT / "src" / src).read_text(encoding="utf-8").splitlines()
-        body = render(lines, [], src == "components.md")
+        body = render(lines, [], src in VISUAL_PAGES)
         body = body.replace("<details class=\"answer\">", "<details class=\"answer\" open>")
         body = body.replace('<div class="answer-body">', '<div class="answer-body"><p class="answer-label">Answer</p>')
         if src == "questions.md":
@@ -327,7 +331,7 @@ def build_print():
     cover = (
         f'<section class="cover"><h1>{SITE}</h1><p>System design for a small business with a big traffic spike.</p>'
         '<ol><li><a href="#part-index">Framework</a>: the six phases in 60 minutes</li>'
-        '<li><a href="#part-components">Components</a>: what each part is and when to use it</li>'
+        '<li><a href="#part-components">Components</a>: the 23 parts you need, drawn</li>'
         '<li><a href="#part-questions">Sample questions</a>: 8 prompts with worked answers, then 20 follow-up drills</li></ol></section>'
     )
     css = (ROOT / "style.css").read_text(encoding="utf-8")
@@ -343,10 +347,10 @@ def build_print():
 
 
 def main():
-    for src, dest, label in PAGES:
+    for src, dest, label in PAGES + EXTRA_PAGES:
         lines = (ROOT / "src" / src).read_text(encoding="utf-8").splitlines()
         toc = []
-        body = render(lines, toc, src == "components.md")
+        body = render(lines, toc, src in VISUAL_PAGES)
         (ROOT / dest).write_text(page(label, dest, body, toc), encoding="utf-8")
         print("wrote", dest)
     build_print()

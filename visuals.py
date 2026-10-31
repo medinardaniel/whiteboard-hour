@@ -497,6 +497,32 @@ SPECS = {
 }
 
 
+# The 23 core cards. Reuse a reference drawing where it already fits.
+CORE = {
+    "Stateless API, one service": 'split:LB -> [server:API, server:API, server:API] -> db:State lives~in the DB',
+    "Postgres (managed)": 'server:API -> {one transaction| table:orders, table:stock} ;; Not yet:: key:DynamoDB!muted .. :only past one~primary at scale',
+    "Object storage": 'user:Browser ->"signed URL" bucket:Bucket -> globe:CDN ;; user:Browser -x>"not through" server:API',
+    "Queue + workers": 'server:API -> queue:Queue -> [gear:Worker, gear:Worker] ;; gear:Worker ->"5th failure" inbox:Dead~letters -> bell:Alert',
+    "Sweeper and reconciliation jobs": 'clock:Every minute -> sweep:Sweeper ->"expired?" db:Holds ;; db:Our orders <->"compare, fix gaps" card:Stripe',
+    "Conditional update": SPECS["Atomic conditional update"],
+    "Holds that expire": 'user:Checkout -> clock:Hold~10 min -> [card:Paid!good, retry:Expired:~released] ;; :Paid -x>"never back" :Held',
+    "Cache with a short TTL": 'server:API ->"hit, 1 ms" bolt:Redis ;; server:API -->"miss: read, then fill" db:DB',
+    "Rate limits": SPECS["Rate limiter"],
+    "Waiting room": SPECS["Waiting room / virtual queue"],
+    "Replicas and failover": 'server:Writes -> db:Primary -->"copies" [db:Replica, db:Replica] <- server:Reads ;; db:Primary!bad -->"30 to 60 s" db:Standby~promoted!good',
+    "Connection pooler": SPECS["Connection pooling"],
+    "Pre-scaling": 'clock:T minus 1 h -> scaleup:Scale to 10 -> users:Spike hits~warm servers ;; chart:Autoscaling!muted ->"1 to 5 min" :Too late for~a fast spike',
+    "Hosted checkout + webhooks": SPECS["Payment provider"],
+    "Timeouts, retries, circuit breaker": 'server:API ->"2 s timeout, same key" card:Stripe ;; :Closed ->"5 fails" :Open ->"30 s" :Half-open',
+    "Flags and kill switches": 'flag:Pause orders~ON -->"no deploy" [server:API, server:API] -> :Back soon page',
+    "Load test and game day": 'weight:Load test~3x peak -> server:Staging -> check:Pass bar!good ;; flag:Flip~switches -> x:Fake~outage -> doc:Fix~runbook',
+    "Safe deploys": 'split:LB ->"95%" server:v1 ;; split:LB ->"5%" server:v2 canary ;; snow:Freeze -> users:Event -> pipeline:Deploys~resume',
+    "Dashboards and alerts": 'chart:Errors > 2% -> bell:Alert -> doc:Runbook -> flag:Flip switch',
+    "Security basics": 'user:Browser ->"HTTPS" lock:LB ->"private" server:API <- vault:Secrets',
+}
+SPECS.update(CORE)
+
+
 def visual_for(title):
     if title in CUSTOM:
         return CUSTOM[title]()
