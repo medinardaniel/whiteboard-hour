@@ -1,0 +1,119 @@
+{
+ "target": "deck/c16.html",
+ "viewport": [
+  1920,
+  1080
+ ],
+ "voice": "en-US-AndrewMultilingualNeural",
+ "rate": "+2%",
+ "pronounce": {
+  "CDN": "C D N",
+  "DNS": "D N S",
+  "API": "A P I",
+  "APIs": "A P Is",
+  "SQL": "sequel",
+  "HTTPS": "H T T P S",
+  "WAF": "waff",
+  "DDoS": "D dos",
+  "PCI": "P C I",
+  "RPO": "R P O",
+  "RTO": "R T O",
+  "SLO": "S L O",
+  "TTL": "T T L",
+  "k6": "K six",
+  "PgBouncer": "P G bouncer",
+  "Redis": "reddis",
+  "ECS": "E C S",
+  "Multi-AZ": "multi A Z",
+  "ACID": "acid",
+  "429": "four twenty-nine",
+  "SMS": "S M S",
+  "a7f3": "A 7 F 3",
+  "Pub/sub": "pub sub",
+  "OK": "okay",
+  "TVs": "T Vs",
+  "TV": "T V",
+  "IP": "I P",
+  "IPs": "I Ps",
+  "CPU": "C P U",
+  "PDFs": "P D Fs",
+  "URL": "U R L",
+  "AM": "A M",
+  "PM": "P M",
+  "SELECT": "select",
+  "UPDATE": "update",
+  "FOR": "for",
+  "id": "I D",
+  "ids": "I Ds",
+  "DynamoDB": "Dynamo D B",
+  "Kubernetes": "kubernetes",
+  "Cloud Run": "Cloud Run",
+  "Locust": "locust",
+  "Queue-it": "queue it"
+ },
+ "load_ms": 1800,
+ "gap_ms": 450,
+ "tail_ms": 1500,
+ "cues": [
+  {
+   "say": "Component 16: Pre-scaling. Add server copies and upgrade the database before a spike you know is coming. You'll bring this up during the spike defenses."
+  },
+  {
+   "do": "press:ArrowRight",
+   "say": "Think of it as: Calling in extra staff before the lunch rush, not during it. Use it for any planned event."
+  },
+  {
+   "do": "press:ArrowRight",
+   "say": "Here's a real scenario. The snow forecast airs on the 6 PM news. Tire-shop traffic will jump 20 times in 2 minutes."
+  },
+  {
+   "do": "press:ArrowRight",
+   "settle_ms": 450,
+   "say": "Without it: Autoscaling notices the busy servers at 6:06."
+  },
+  {
+   "do": "press:ArrowRight",
+   "settle_ms": 450,
+   "say": "New copies are ready at 6:09."
+  },
+  {
+   "do": "press:ArrowRight",
+   "settle_ms": 450,
+   "say": "4 minutes of errors at the worst moment."
+  },
+  {
+   "do": "press:ArrowRight",
+   "settle_ms": 450,
+   "say": "With it: 5 PM: 2 to 6 copies, bigger database, CDN warmed."
+  },
+  {
+   "do": "press:ArrowRight",
+   "settle_ms": 450,
+   "say": "6:05: the spike arrives; the system is already sized."
+  },
+  {
+   "do": "press:ArrowRight",
+   "say": "Why it works: You know when the spike is coming, so use that."
+  },
+  {
+   "do": "press:ArrowRight",
+   "settle_ms": 450,
+   "say": "In the interview, say: Autoscaling reacts in minutes. The spike arrives in seconds."
+  },
+  {
+   "do": "press:ArrowRight",
+   "say": "A few related terms you may hear."
+  },
+  {
+   "do": "press:ArrowRight",
+   "settle_ms": 400,
+   "say": "Autoscaling: The cloud adds copies when servers get busy. Keep it as a safety net."
+  },
+  {
+   "do": "press:ArrowRight",
+   "settle_ms": 400,
+   "say": "Workers: Scale them on queue length, not CPU.",
+   "post_ms": 900
+  }
+ ]
+}

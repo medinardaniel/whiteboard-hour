@@ -1,0 +1,119 @@
+{
+ "target": "deck/c05.html",
+ "viewport": [
+  1920,
+  1080
+ ],
+ "voice": "en-US-AndrewMultilingualNeural",
+ "rate": "+2%",
+ "pronounce": {
+  "CDN": "C D N",
+  "DNS": "D N S",
+  "API": "A P I",
+  "APIs": "A P Is",
+  "SQL": "sequel",
+  "HTTPS": "H T T P S",
+  "WAF": "waff",
+  "DDoS": "D dos",
+  "PCI": "P C I",
+  "RPO": "R P O",
+  "RTO": "R T O",
+  "SLO": "S L O",
+  "TTL": "T T L",
+  "k6": "K six",
+  "PgBouncer": "P G bouncer",
+  "Redis": "reddis",
+  "ECS": "E C S",
+  "Multi-AZ": "multi A Z",
+  "ACID": "acid",
+  "429": "four twenty-nine",
+  "SMS": "S M S",
+  "a7f3": "A 7 F 3",
+  "Pub/sub": "pub sub",
+  "OK": "okay",
+  "TVs": "T Vs",
+  "TV": "T V",
+  "IP": "I P",
+  "IPs": "I Ps",
+  "CPU": "C P U",
+  "PDFs": "P D Fs",
+  "URL": "U R L",
+  "AM": "A M",
+  "PM": "P M",
+  "SELECT": "select",
+  "UPDATE": "update",
+  "FOR": "for",
+  "id": "I D",
+  "ids": "I Ds",
+  "DynamoDB": "Dynamo D B",
+  "Kubernetes": "kubernetes",
+  "Cloud Run": "Cloud Run",
+  "Locust": "locust",
+  "Queue-it": "queue it"
+ },
+ "load_ms": 1800,
+ "gap_ms": 450,
+ "tail_ms": 1500,
+ "cues": [
+  {
+   "say": "Component 5: Object storage. Cloud storage for files, each saved under a name. Cheap and practically unlimited. The database keeps only the file's name. You'll bring this up during version one, when you draw the basic design."
+  },
+  {
+   "do": "press:ArrowRight",
+   "say": "Think of it as: Google Drive for your app. Use it for photos, PDFs, videos, and exports."
+  },
+  {
+   "do": "press:ArrowRight",
+   "say": "Here's a real scenario. A print-shop customer uploads 10 photos (4 megabytes each) for holiday cards."
+  },
+  {
+   "do": "press:ArrowRight",
+   "settle_ms": 450,
+   "say": "Without it: 40 megabytes per order passes through the API servers."
+  },
+  {
+   "do": "press:ArrowRight",
+   "settle_ms": 450,
+   "say": "Thousands of orders clog servers and bloat the database."
+  },
+  {
+   "do": "press:ArrowRight",
+   "settle_ms": 450,
+   "say": "With it: API hands the browser 10 signed upload links."
+  },
+  {
+   "do": "press:ArrowRight",
+   "settle_ms": 450,
+   "say": "Browser sends photos straight to storage."
+  },
+  {
+   "do": "press:ArrowRight",
+   "settle_ms": 450,
+   "say": "Database keeps the names; a worker fetches photos to print."
+  },
+  {
+   "do": "press:ArrowRight",
+   "say": "Why it works: Storage is built for big files; your servers and database aren't."
+  },
+  {
+   "do": "press:ArrowRight",
+   "settle_ms": 450,
+   "say": "In the interview, say: The browser uploads straight to storage with a signed URL, so photos never pass through our servers."
+  },
+  {
+   "do": "press:ArrowRight",
+   "say": "A few related terms you may hear."
+  },
+  {
+   "do": "press:ArrowRight",
+   "settle_ms": 400,
+   "say": "Signed URL: A temporary link to upload or download one file directly."
+  },
+  {
+   "do": "press:ArrowRight",
+   "settle_ms": 400,
+   "say": "CDN: Serve stored files through it.",
+   "post_ms": 900
+  }
+ ]
+}

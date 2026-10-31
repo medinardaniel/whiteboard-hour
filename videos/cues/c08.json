@@ -1,0 +1,129 @@
+{
+ "target": "deck/c08.html",
+ "viewport": [
+  1920,
+  1080
+ ],
+ "voice": "en-US-AndrewMultilingualNeural",
+ "rate": "+2%",
+ "pronounce": {
+  "CDN": "C D N",
+  "DNS": "D N S",
+  "API": "A P I",
+  "APIs": "A P Is",
+  "SQL": "sequel",
+  "HTTPS": "H T T P S",
+  "WAF": "waff",
+  "DDoS": "D dos",
+  "PCI": "P C I",
+  "RPO": "R P O",
+  "RTO": "R T O",
+  "SLO": "S L O",
+  "TTL": "T T L",
+  "k6": "K six",
+  "PgBouncer": "P G bouncer",
+  "Redis": "reddis",
+  "ECS": "E C S",
+  "Multi-AZ": "multi A Z",
+  "ACID": "acid",
+  "429": "four twenty-nine",
+  "SMS": "S M S",
+  "a7f3": "A 7 F 3",
+  "Pub/sub": "pub sub",
+  "OK": "okay",
+  "TVs": "T Vs",
+  "TV": "T V",
+  "IP": "I P",
+  "IPs": "I Ps",
+  "CPU": "C P U",
+  "PDFs": "P D Fs",
+  "URL": "U R L",
+  "AM": "A M",
+  "PM": "P M",
+  "SELECT": "select",
+  "UPDATE": "update",
+  "FOR": "for",
+  "id": "I D",
+  "ids": "I Ds",
+  "DynamoDB": "Dynamo D B",
+  "Kubernetes": "kubernetes",
+  "Cloud Run": "Cloud Run",
+  "Locust": "locust",
+  "Queue-it": "queue it"
+ },
+ "load_ms": 1800,
+ "gap_ms": 450,
+ "tail_ms": 1500,
+ "cues": [
+  {
+   "say": "Component 8: Conditional update. Check and change in one database command: subtract 1 only if at least 1 is left. The database runs it as a single step. You'll bring this up during version one and the spike, to protect what must never break."
+  },
+  {
+   "do": "press:ArrowRight",
+   "say": "Think of it as: Grabbing the last item off a shelf: only one hand can take it. Use it for no oversell, stock, seats, and time slots."
+  },
+  {
+   "do": "press:ArrowRight",
+   "say": "Here's a real scenario. 1 TV left on sale. Alice and Bob click Buy in the same millisecond."
+  },
+  {
+   "do": "press:ArrowRight",
+   "settle_ms": 450,
+   "say": "Without it: Both read left equals 1."
+  },
+  {
+   "do": "press:ArrowRight",
+   "settle_ms": 450,
+   "say": "Both write left equals 0."
+  },
+  {
+   "do": "press:ArrowRight",
+   "settle_ms": 450,
+   "say": "2 TVs sold, 1 in stock."
+  },
+  {
+   "do": "press:ArrowRight",
+   "settle_ms": 450,
+   "say": "With it: both run this one statement. It subtracts one only where at least one is left."
+  },
+  {
+   "do": "press:ArrowRight",
+   "settle_ms": 450,
+   "say": "Alice: 1 row changed, left equals 0."
+  },
+  {
+   "do": "press:ArrowRight",
+   "settle_ms": 450,
+   "say": "Bob: 0 rows changed, sees sold out."
+  },
+  {
+   "do": "press:ArrowRight",
+   "say": "Why it works: The database refuses to go below zero, no matter how close the clicks."
+  },
+  {
+   "do": "press:ArrowRight",
+   "settle_ms": 450,
+   "say": "In the interview, say: One statement, so the database refuses to go below zero."
+  },
+  {
+   "do": "press:ArrowRight",
+   "say": "A few related terms you may hear."
+  },
+  {
+   "do": "press:ArrowRight",
+   "settle_ms": 400,
+   "say": "SELECT ... FOR UPDATE: Lock the row for complex logic; others wait."
+  },
+  {
+   "do": "press:ArrowRight",
+   "settle_ms": 400,
+   "say": "Redis counter: Avoid: then two places hold the truth."
+  },
+  {
+   "do": "press:ArrowRight",
+   "settle_ms": 400,
+   "say": "Distributed lock: Avoid: the database already does this.",
+   "post_ms": 900
+  }
+ ]
+}

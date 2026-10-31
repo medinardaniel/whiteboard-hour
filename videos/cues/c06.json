@@ -1,0 +1,144 @@
+{
+ "target": "deck/c06.html",
+ "viewport": [
+  1920,
+  1080
+ ],
+ "voice": "en-US-AndrewMultilingualNeural",
+ "rate": "+2%",
+ "pronounce": {
+  "CDN": "C D N",
+  "DNS": "D N S",
+  "API": "A P I",
+  "APIs": "A P Is",
+  "SQL": "sequel",
+  "HTTPS": "H T T P S",
+  "WAF": "waff",
+  "DDoS": "D dos",
+  "PCI": "P C I",
+  "RPO": "R P O",
+  "RTO": "R T O",
+  "SLO": "S L O",
+  "TTL": "T T L",
+  "k6": "K six",
+  "PgBouncer": "P G bouncer",
+  "Redis": "reddis",
+  "ECS": "E C S",
+  "Multi-AZ": "multi A Z",
+  "ACID": "acid",
+  "429": "four twenty-nine",
+  "SMS": "S M S",
+  "a7f3": "A 7 F 3",
+  "Pub/sub": "pub sub",
+  "OK": "okay",
+  "TVs": "T Vs",
+  "TV": "T V",
+  "IP": "I P",
+  "IPs": "I Ps",
+  "CPU": "C P U",
+  "PDFs": "P D Fs",
+  "URL": "U R L",
+  "AM": "A M",
+  "PM": "P M",
+  "SELECT": "select",
+  "UPDATE": "update",
+  "FOR": "for",
+  "id": "I D",
+  "ids": "I Ds",
+  "DynamoDB": "Dynamo D B",
+  "Kubernetes": "kubernetes",
+  "Cloud Run": "Cloud Run",
+  "Locust": "locust",
+  "Queue-it": "queue it"
+ },
+ "load_ms": 1800,
+ "gap_ms": 450,
+ "tail_ms": 1500,
+ "cues": [
+  {
+   "say": "Component 6: Queue + workers. A to-do list for slow work. The server writes a note and replies at once; background workers pick up notes and do the work. You'll bring this up during version one, when you draw the basic design."
+  },
+  {
+   "do": "press:ArrowRight",
+   "say": "Think of it as: Order tickets on a kitchen rail: the cashier doesn't cook. Use it for emails, texts, image processing, and anything that can lag."
+  },
+  {
+   "do": "press:ArrowRight",
+   "say": "Here's a real scenario. Each paid pizza order sends a confirmation text. The SMS provider takes 1 to 2 seconds and sometimes times out."
+  },
+  {
+   "do": "press:ArrowRight",
+   "settle_ms": 450,
+   "say": "Without it: The customer waits on the text before seeing confirmed."
+  },
+  {
+   "do": "press:ArrowRight",
+   "settle_ms": 450,
+   "say": "A provider timeout becomes a checkout error."
+  },
+  {
+   "do": "press:ArrowRight",
+   "settle_ms": 450,
+   "say": "With it: API queues text order 42 and confirms instantly."
+  },
+  {
+   "do": "press:ArrowRight",
+   "settle_ms": 450,
+   "say": "A worker sends the text, retrying on failure."
+  },
+  {
+   "do": "press:ArrowRight",
+   "settle_ms": 450,
+   "say": "After 5 failures: dead-letter queue and an alert."
+  },
+  {
+   "do": "press:ArrowRight",
+   "settle_ms": 450,
+   "say": "900 orders in 30 minutes: texts lag minutes, none lost."
+  },
+  {
+   "do": "press:ArrowRight",
+   "say": "Why it works: Checkout stays fast, and a slow provider can't break ordering."
+  },
+  {
+   "do": "press:ArrowRight",
+   "settle_ms": 450,
+   "say": "In the interview, say: At-least-once delivery, plus workers that are safe to run twice."
+  },
+  {
+   "do": "press:ArrowRight",
+   "say": "A few related terms you may hear."
+  },
+  {
+   "do": "press:ArrowRight",
+   "settle_ms": 400,
+   "say": "At-least-once: A note may be handed out twice, so jobs must be safe to repeat."
+  },
+  {
+   "do": "press:ArrowRight",
+   "settle_ms": 400,
+   "say": "Dead-letter queue: Where a note goes after N failures. Alert on it."
+  },
+  {
+   "do": "press:ArrowRight",
+   "settle_ms": 400,
+   "say": "Queue length: Add workers when the list gets long."
+  },
+  {
+   "do": "press:ArrowRight",
+   "settle_ms": 400,
+   "say": "Kafka: A replayable event log for many readers. Overkill here."
+  },
+  {
+   "do": "press:ArrowRight",
+   "settle_ms": 400,
+   "say": "Pub/sub: One message delivered to several listeners."
+  },
+  {
+   "do": "press:ArrowRight",
+   "settle_ms": 400,
+   "say": "Outbox: Save the message in the same transaction as the order.",
+   "post_ms": 900
+  }
+ ]
+}

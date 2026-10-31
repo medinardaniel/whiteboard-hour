@@ -1,0 +1,119 @@
+{
+ "target": "deck/c13.html",
+ "viewport": [
+  1920,
+  1080
+ ],
+ "voice": "en-US-AndrewMultilingualNeural",
+ "rate": "+2%",
+ "pronounce": {
+  "CDN": "C D N",
+  "DNS": "D N S",
+  "API": "A P I",
+  "APIs": "A P Is",
+  "SQL": "sequel",
+  "HTTPS": "H T T P S",
+  "WAF": "waff",
+  "DDoS": "D dos",
+  "PCI": "P C I",
+  "RPO": "R P O",
+  "RTO": "R T O",
+  "SLO": "S L O",
+  "TTL": "T T L",
+  "k6": "K six",
+  "PgBouncer": "P G bouncer",
+  "Redis": "reddis",
+  "ECS": "E C S",
+  "Multi-AZ": "multi A Z",
+  "ACID": "acid",
+  "429": "four twenty-nine",
+  "SMS": "S M S",
+  "a7f3": "A 7 F 3",
+  "Pub/sub": "pub sub",
+  "OK": "okay",
+  "TVs": "T Vs",
+  "TV": "T V",
+  "IP": "I P",
+  "IPs": "I Ps",
+  "CPU": "C P U",
+  "PDFs": "P D Fs",
+  "URL": "U R L",
+  "AM": "A M",
+  "PM": "P M",
+  "SELECT": "select",
+  "UPDATE": "update",
+  "FOR": "for",
+  "id": "I D",
+  "ids": "I Ds",
+  "DynamoDB": "Dynamo D B",
+  "Kubernetes": "kubernetes",
+  "Cloud Run": "Cloud Run",
+  "Locust": "locust",
+  "Queue-it": "queue it"
+ },
+ "load_ms": 1800,
+ "gap_ms": 450,
+ "tail_ms": 1500,
+ "cues": [
+  {
+   "say": "Component 13: Waiting room. A you're in line page. Visitors wait there and are let into the real site at a fixed rate. You buy it from a vendor. You'll bring this up during the spike defenses."
+  },
+  {
+   "do": "press:ArrowRight",
+   "say": "Think of it as: A rope line outside a busy store. Use it for demand far above capacity, and A sale that starts at an exact minute."
+  },
+  {
+   "do": "press:ArrowRight",
+   "say": "Here's a real scenario. A sale starts at exactly 6:00 AM. 40,000 people are refreshing; checkout was tested for 300 a second."
+  },
+  {
+   "do": "press:ArrowRight",
+   "settle_ms": 450,
+   "say": "Without it: 40,000 requests at once; the site falls over."
+  },
+  {
+   "do": "press:ArrowRight",
+   "settle_ms": 450,
+   "say": "The fastest connection wins."
+  },
+  {
+   "do": "press:ArrowRight",
+   "settle_ms": 450,
+   "say": "With it: Everyone lands on the line page."
+  },
+  {
+   "do": "press:ArrowRight",
+   "settle_ms": 450,
+   "say": "Everyone who arrived before 6:00 is shuffled."
+  },
+  {
+   "do": "press:ArrowRight",
+   "settle_ms": 450,
+   "say": "Let in 300 a second; each sees their place."
+  },
+  {
+   "do": "press:ArrowRight",
+   "say": "Why it works: The site runs at a load it was tested for, and the order is fair."
+  },
+  {
+   "do": "press:ArrowRight",
+   "settle_ms": 450,
+   "say": "In the interview, say: Behind a flag. On only if traffic beats the plan."
+  },
+  {
+   "do": "press:ArrowRight",
+   "say": "A few related terms you may hear."
+  },
+  {
+   "do": "press:ArrowRight",
+   "settle_ms": 400,
+   "say": "Fairness: Shuffle everyone who arrived before the start."
+  },
+  {
+   "do": "press:ArrowRight",
+   "settle_ms": 400,
+   "say": "Vendors: Cloudflare Waiting Room, Queue-it.",
+   "post_ms": 900
+  }
+ ]
+}

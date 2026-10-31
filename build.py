@@ -115,6 +115,15 @@ def heading(level, text, toc):
     return f'<h{level} id="{hid}">{inline(text)}</h{level}>'
 
 
+def video_tag(n):
+    """A lazy video player, only if the recording exists."""
+    name = f"videos/c{n:02d}"
+    if not (ROOT / f"{name}.mp4").exists():
+        return ""
+    return (f'<video class="cc-video" controls playsinline preload="none" poster="{name}.jpg">'
+            f'<source src="{name}.mp4" type="video/mp4"></video>')
+
+
 def core_card(c):
     ic = visuals.icon_svg
     steps = lambda xs: "<ol>" + "".join(f"<li>{inline(x)}</li>" for x in xs) + "</ol>"
@@ -127,6 +136,7 @@ def core_card(c):
         MISSING.append(c["title"])
     return f"""<article class="cc" id="c{c['num']}">
 <div class="cc-head"><span class="num">{c['num']}</span><h3>{inline(c['title'])}</h3></div>
+{video_tag(c['num'])}
 <div class="vis">{svg or ''}</div>
 <p class="cc-plain">{inline(c['plain'])}</p>
 <div class="analogy">{ic('bulb', 18)}<span>{inline(c['analogy'])}</span></div>
@@ -351,6 +361,7 @@ details.answer > summary { display: none; }
 #part-components .card dd.f-example::after { content: none; }
 #part-components .card dt.f-example { display: block; margin-top: .3rem; }
 #part-components .card dt.f-example::after { content: none; }
+.cc-video { display: none; }
 .cover { height: 9in; display: flex; flex-direction: column; justify-content: center; }
 .cover h1 { font-size: 30pt; margin: 0 0 .5rem; }
 .cover ol { font-size: 12pt; }

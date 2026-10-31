@@ -228,3 +228,4 @@ svg.v { display: block; width: 100%; height: auto; margin: 0 auto; overflow: vis
 .term { border: 1px solid var(--line); border-radius: 8px; padding: .35rem .5rem; font-size: .84rem; background: var(--bg); }
 .term b { display: block; font-size: .88rem; }
 .term span { color: var(--muted); }
+.cc-video { display: block; width: 100%; aspect-ratio: 16 / 9; margin: .6rem 0 .4rem; border-radius: 10px; background: #000; }

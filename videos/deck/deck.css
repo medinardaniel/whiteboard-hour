@@ -1,0 +1,61 @@
+/* 1920x1080 video slides for one component. Reuses the site's colors and diagram styles. */
+html, body.deck { margin: 0; width: 1920px; height: 1080px; overflow: hidden; background: var(--bg); }
+body.deck { font-size: 34px; line-height: 1.35; }
+.slide { display: none; position: absolute; inset: 0; padding: 70px 110px; box-sizing: border-box; flex-direction: column; }
+.slide.active { display: flex; }
+.step { opacity: 0; transform: translateY(14px); transition: opacity .45s, transform .45s; }
+.step.on { opacity: 1; transform: none; }
+.fi { flex: none; }
+.slide h2 { font-size: 44px; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; margin: 10px 0 24px; }
+
+/* 1. Title */
+.kicker { font-size: 28px; color: var(--accent); font-weight: 700; text-transform: uppercase; letter-spacing: .08em; }
+.s-title h1 { font-size: 84px; margin: 14px 0 20px; display: flex; align-items: center; gap: 28px; }
+.s-title h1 .num { background: var(--accent); color: #fff; border-radius: 16px; padding: 4px 26px; font-size: 64px; }
+.s-title .dia { flex: 1; display: flex; align-items: center; justify-content: center; min-height: 0; }
+.s-title .dia svg.v { max-width: 1600px !important; width: auto; height: 520px; }
+.s-title .plain { font-size: 40px; margin: 20px 0 0; max-width: 1650px; }
+
+/* 2. Analogy and uses */
+.s-analogy .analogy { display: flex; gap: 32px; align-items: center; background: var(--note); border-radius: 22px; padding: 44px 50px; font-size: 52px; font-style: italic; margin-bottom: 60px; }
+.s-analogy .analogy .fi { stroke: var(--warn); }
+.s-analogy .tags { display: flex; flex-wrap: wrap; gap: 22px; }
+.s-analogy .tag { font-size: 42px; padding: 10px 34px; border-width: 3px; }
+
+/* 3. Scenario: without vs with */
+.s-scene .scene { display: flex; gap: 22px; align-items: flex-start; font-size: 46px; margin-bottom: 40px; }
+.s-scene .scene .fi { stroke: var(--accent); margin-top: 4px; }
+.s-scene .vs { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; flex: 1; margin: 0; }
+.s-scene .side { border-radius: 22px; padding: 30px 38px; border-width: 3px; }
+.s-scene .side-h { font-size: 42px; gap: 14px; }
+.s-scene .side ol { font-size: 46px; padding-left: 60px; margin-top: 20px; line-height: 1.3; }
+.s-scene .side li { margin: 22px 0; }
+.s-scene .code { font-size: 30px; margin-top: 18px; background: var(--card); }
+
+/* 4. Why and the interview line */
+.s-why { justify-content: center; gap: 70px; }
+.s-why .why { background: var(--accent-soft); border-radius: 22px; padding: 44px 54px; font-size: 48px; }
+.s-why .why b { display: block; font-size: 34px; text-transform: uppercase; letter-spacing: .06em; color: var(--accent); margin-bottom: 10px; }
+.s-why .say { display: flex; gap: 30px; align-items: center; font-size: 46px; font-weight: 700; border: 4px solid var(--accent); border-radius: 40px 40px 40px 8px; padding: 40px 50px; margin: 0; }
+.s-why .say .fi { stroke: var(--accent); }
+
+/* 5. Terms */
+.s-terms .terms { display: grid; grid-template-columns: repeat(3, 1fr); gap: 30px; }
+.s-terms .term { font-size: 32px; padding: 26px 30px; border-radius: 18px; border-width: 2px; background: var(--card); }
+.s-terms .term b { font-size: 38px; margin-bottom: 8px; }
+
+/* Larger type for the sparse slides */
+.s-analogy { justify-content: center; }
+.s-analogy .analogy { font-size: 64px; }
+.s-analogy .tag { font-size: 54px; padding: 14px 44px; }
+.s-why .why { font-size: 62px; }
+.s-why .why b { font-size: 40px; }
+.s-why .say { font-size: 58px; }
+.s-terms { justify-content: center; }
+.s-terms .terms { grid-template-columns: repeat(2, 1fr); gap: 34px; }
+.s-terms .term { font-size: 40px; padding: 30px 38px; }
+.s-terms .term b { font-size: 48px; }
+.s-terms .term span { color: var(--fg); opacity: .75; }
+
+/* No clicks in these videos, so hide the recorder cursor */
+#__demo_cursor { display: none !important; }

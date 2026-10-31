@@ -1,0 +1,139 @@
+{
+ "target": "deck/c04.html",
+ "viewport": [
+  1920,
+  1080
+ ],
+ "voice": "en-US-AndrewMultilingualNeural",
+ "rate": "+2%",
+ "pronounce": {
+  "CDN": "C D N",
+  "DNS": "D N S",
+  "API": "A P I",
+  "APIs": "A P Is",
+  "SQL": "sequel",
+  "HTTPS": "H T T P S",
+  "WAF": "waff",
+  "DDoS": "D dos",
+  "PCI": "P C I",
+  "RPO": "R P O",
+  "RTO": "R T O",
+  "SLO": "S L O",
+  "TTL": "T T L",
+  "k6": "K six",
+  "PgBouncer": "P G bouncer",
+  "Redis": "reddis",
+  "ECS": "E C S",
+  "Multi-AZ": "multi A Z",
+  "ACID": "acid",
+  "429": "four twenty-nine",
+  "SMS": "S M S",
+  "a7f3": "A 7 F 3",
+  "Pub/sub": "pub sub",
+  "OK": "okay",
+  "TVs": "T Vs",
+  "TV": "T V",
+  "IP": "I P",
+  "IPs": "I Ps",
+  "CPU": "C P U",
+  "PDFs": "P D Fs",
+  "URL": "U R L",
+  "AM": "A M",
+  "PM": "P M",
+  "SELECT": "select",
+  "UPDATE": "update",
+  "FOR": "for",
+  "id": "I D",
+  "ids": "I Ds",
+  "DynamoDB": "Dynamo D B",
+  "Kubernetes": "kubernetes",
+  "Cloud Run": "Cloud Run",
+  "Locust": "locust",
+  "Queue-it": "queue it"
+ },
+ "load_ms": 1800,
+ "gap_ms": 450,
+ "tail_ms": 1500,
+ "cues": [
+  {
+   "say": "Component 4: Postgres (managed). The standard relational database: tables of rows that many users can change at once without corrupting anything. Your source of truth. You'll bring this up during version one, when you draw the basic design."
+  },
+  {
+   "do": "press:ArrowRight",
+   "say": "Think of it as: A shared spreadsheet that enforces its own rules. Use it for orders, payments, stock, and bookings."
+  },
+  {
+   "do": "press:ArrowRight",
+   "say": "Here's a real scenario. Two customers click the 9 AM Saturday slot at the tire shop at the same instant."
+  },
+  {
+   "do": "press:ArrowRight",
+   "settle_ms": 450,
+   "say": "Without it: Booking saved, but the bay never marked taken (crash in between)."
+  },
+  {
+   "do": "press:ArrowRight",
+   "settle_ms": 450,
+   "say": "Both customers get the same bay."
+  },
+  {
+   "do": "press:ArrowRight",
+   "settle_ms": 450,
+   "say": "With it: One transaction: mark bay taken and save booking, both or neither."
+  },
+  {
+   "do": "press:ArrowRight",
+   "settle_ms": 450,
+   "say": "Unique rule on (bay, time) rejects the second insert."
+  },
+  {
+   "do": "press:ArrowRight",
+   "settle_ms": 450,
+   "say": "Second customer is offered the next free slot."
+  },
+  {
+   "do": "press:ArrowRight",
+   "say": "Why it works: These facts must never be wrong, and the database guarantees them. A few writes a second is nothing for one database."
+  },
+  {
+   "do": "press:ArrowRight",
+   "settle_ms": 450,
+   "say": "In the interview, say: Postgres, not Dynamodatabase: my write changes two rows together, and one database is plenty at these numbers."
+  },
+  {
+   "do": "press:ArrowRight",
+   "say": "A few related terms you may hear."
+  },
+  {
+   "do": "press:ArrowRight",
+   "settle_ms": 400,
+   "say": "Transaction: Several changes succeed or fail together ."
+  },
+  {
+   "do": "press:ArrowRight",
+   "settle_ms": 400,
+   "say": "Constraint: A rule the database enforces, like unique (bay, time)."
+  },
+  {
+   "do": "press:ArrowRight",
+   "settle_ms": 400,
+   "say": "Index: A sorted lookup, so a query doesn't read every row. Every frequent query needs one."
+  },
+  {
+   "do": "press:ArrowRight",
+   "settle_ms": 400,
+   "say": "Managed: The cloud handles backups, patches and recovery."
+  },
+  {
+   "do": "press:ArrowRight",
+   "settle_ms": 400,
+   "say": "Dynamodatabase: Huge-scale lookups by id; clunky multi-row changes; about 1,000 writes a second per hot item."
+  },
+  {
+   "do": "press:ArrowRight",
+   "settle_ms": 400,
+   "say": "Sharding: Splitting data across databases. Never in V1.",
+   "post_ms": 900
+  }
+ ]
+}
