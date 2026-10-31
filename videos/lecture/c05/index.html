@@ -1,0 +1,147 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="color-scheme" content="light">
+<title>Object storage: lecture</title>
+<link rel="stylesheet" href="../lib/lecture.css">
+<script src="../lib/icons.js"></script>
+<script src="../lib/lecture.js"></script>
+</head>
+<body>
+<script>
+Title({ num: 5, name: 'Object storage', sub: 'Files in the cloud, names in the database', phase: 'Version 1', pills: ['Photos, PDFs, video', 'Signed upload links'] });
+
+// ---- definition: files saved under names in a bucket; the database keeps the name
+const D = Define('def', {
+  html: 'A cloud service for <b>files</b>. Each file is saved <b>under a name</b> in a <b>bucket</b>. Cheap, and practically <b>unlimited</b>. Your database keeps <b>only the name</b>.',
+  extra: { label: 'You rent it:', pills: ['Amazon S3', 'Azure Blob Storage', 'Google Cloud Storage'] },
+});
+const dd = D.d;
+dd.node('f', 200, 260, 'photo', 'Files', 'photos, PDFs, video', { w: 230 });
+dd.node('b', 560, 560, 'bucket', 'Bucket', '0 files', { w: 250, h: 150, hidden: true });
+dd.node('db', 230, 860, 'db', 'Database', 'just the names', { w: 230, hidden: true });
+dd.link('f', 'b');
+const names = ['cards/42/1.jpg', 'cards/42/2.jpg', 'invoices/42.pdf', 'video/intro.mp4', 'cards/43/1.jpg'];
+window.SD = async () => {
+  D.show(); dd.pop('b'); await sleep(1300);
+  for (let i = 0; i < names.length; i++) {
+    await dd.send('f', 'b', { dur: 800, r: 16, label: names[i] });
+    dd.rename('b', 'Bucket', (i + 1) + ' files');
+  }
+};
+window.SD2 = async () => {
+  D.more(); dd.link('db', 'b', { dash: 1 }); dd.pop('db'); await sleep(800);
+  dd.badge('db', 'cards/42/1.jpg', 'acc', 'top');
+};
+
+// ---- the problem: 40 MB per order through the API, into the database
+const P = Stage('prob', { caption: ['The problem', 'Every photo passes through your servers'] });
+P.node('u', 200, 560, 'browser', 'Customer', 'browser', { w: 190 });
+P.node('api', 860, 560, 'server', 'API servers', '', { w: 230 });
+P.node('db', 1520, 560, 'db', 'Database', '', { w: 210 });
+P.link('u', 'api'); P.link('api', 'db');
+let pS1, pS2;
+window.S1 = () => {
+  P.show(); P.meter('api', .1); P.meter('db', .1);
+  let n = 0;
+  pS1 = setInterval(() => { if (n++ < 10) { P.send('u', 'api', { dur: 1300, r: 22, label: '4 MB', color: 'warn' }); P.bump('api', .07); } }, 380);
+};
+window.S1b = () => {
+  P.cap('Thousands of orders', 'The servers clog, and the database bloats');
+  clearInterval(pS1);
+  pS1 = P.stream('u', 'api', { every: 220, dur: 1100, r: 22, color: 'warn', onSend: () => P.bump('api', .04) });
+  pS2 = P.stream('api', 'db', { every: 260, dur: 1100, r: 22, color: 'warn', onSend: () => P.bump('db', .04) });
+  setTimeout(() => { P.tone('api', 'bad'); P.tone('db', 'bad'); P.tag('db', 'bloated', 'bad'); }, 2200);
+};
+
+// ---- how it works: signed upload links
+const M = Stage('how', { caption: ['A signed URL', 'A temporary link to upload or download one file'] });
+M.node('u', 220, 580, 'browser', 'Customer', 'browser', { w: 200 });
+M.node('api', 780, 330, 'server', 'API', '', { w: 190 });
+M.node('db', 1380, 330, 'db', 'Database', '', { w: 210 });
+M.node('b', 1100, 830, 'bucket', 'Object storage', 'bucket', { w: 260 });
+M.node('w', 1640, 830, 'gear', 'Worker', 'prints the cards', { w: 230, hidden: true });
+M.link('u', 'api'); M.link('api', 'db'); M.link('u', 'b');
+window.S2 = async () => {
+  S1stop(); M.show(); M.meter('api', .1); await sleep(600);
+  await M.send('u', 'api', { dur: 900, r: 9, label: 'upload 10 photos?' });
+  await M.send('api', 'u', { dur: 1000, color: 'good', label: '10 signed links' });
+  M.badge('u', 'links valid 15 min', 'good', 'bottom');
+};
+window.S3 = async () => {
+  M.cap('Straight to storage', 'Not one byte of the photos touches your servers');
+  for (let i = 0; i < 10; i++) { M.send('u', 'b', { dur: 1400, r: 20, color: 'warn', label: i % 3 ? '' : '4 MB' }); await sleep(260); }
+  await sleep(1300); M.badge('b', '10 photos', 'good'); M.tag('api', 'still calm', 'good');
+};
+window.S3b = async () => {
+  M.cap('The database keeps the names', 'A few short lines of text');
+  await M.send('u', 'api', { dur: 900, r: 9, label: 'done' });
+  await M.send('api', 'db', { dur: 900, r: 9, color: 'good', label: '10 names' });
+  M.badge('db', 'cards/42/1.jpg ...', 'acc');
+};
+window.S3c = async () => {
+  M.cap('Later, a worker fetches by name', 'And prints the holiday cards');
+  M.link('b', 'w'); M.pop('w'); await sleep(700);
+  for (let i = 0; i < 5; i++) { M.send('b', 'w', { dur: 1000, r: 18, color: 'warn' }); await sleep(250); }
+  await sleep(1000); M.tag('w', 'printing', 'good');
+};
+function S1stop() { if (typeof pS1 === 'function') pS1(); else clearInterval(pS1); if (pS2) pS2(); }
+
+// ---- what it's for
+const U = Cards('uses', {
+  head: 'What you use it for', items: [
+    { icon: 'photo', title: 'Uploads', text: 'Photos and videos from your users.' },
+    { icon: 'doc', title: 'Files you make', text: 'PDF invoices and exports, shared with a signed download link.' },
+    { icon: 'globe', color: 'good', title: 'Public files', text: 'Served to everyone through a CDN.' },
+  ],
+});
+window.S4 = () => { U.show(); setTimeout(() => U.reveal(0), 300); };
+window.S4b = () => U.reveal(1);
+window.S4c = () => U.reveal(2);
+
+// ---- scenario: print shop, 10 photos x 4 MB
+const N = Counters('nums', {
+  head: 'The print shop\'s holiday cards', parts: [
+    { n: 10, label: 'photos per order' }, { op: '×' }, { static: '4 MB', label: 'each' }, { op: '=' },
+    { n: 40, fmt: v => v + ' MB', label: 'per order', cls: 'res' }],
+});
+window.S5 = async () => { N.show(); await sleep(300); await N.run(1000, 500); N.note('× 1,000 holiday orders = <b>40 GB</b>'); };
+
+const B = Bars('bars', {
+  head: 'What passes through your API servers (1,000 orders)', max: 40,
+  charts: [
+    { title: 'Without object storage', bars: [{ label: 'Through the API', value: 40, text: '40 GB', color: 'bad', over: true }] },
+    { title: 'With signed links', bars: [{ label: 'Through the API', value: 0.01, text: '~10 MB', color: 'good' }, { label: 'Straight to storage', value: 40, text: '40 GB', color: 'acc' }] },
+  ],
+});
+window.S6 = () => { B.show(); setTimeout(() => B.grow(0), 400); };
+window.S6b = () => B.grow(1, 900);
+
+// ---- where it fits
+const Y = System('sys', { highlight: ['storage', 'browser', 'cdn'] });
+window.S7 = async () => {
+  Y.show(); await sleep(600);
+  Y.cap('Off to the side', 'The browser uploads to it directly');
+  for (let i = 0; i < 3; i++) { Y.send('browser', 'storage', { dur: 900, color: 'warn', r: 16 }); await sleep(700); }
+};
+window.S7b = async () => {
+  Y.cap('Files go out through the CDN', 'Storage is the CDN\'s origin for them');
+  for (let i = 0; i < 3; i++) { Y.flow(['storage', 'cdn', 'browser'], { dur: 650, color: 'good' }); await sleep(800); }
+};
+
+// ---- trade-offs
+const T = Cards('trade', {
+  head: 'Two things to know', cols: 2, items: [
+    { icon: 'lock', color: 'bad', title: 'Keep the bucket private', text: 'Hand out signed links that expire. A public bucket leaks every customer\'s files.' },
+    { icon: 'doc', color: 'warn', title: 'Files are written whole', text: 'You replace a file. You don\'t edit part of it.' },
+  ],
+});
+window.S8 = () => { T.show(); setTimeout(() => T.reveal(0), 300); };
+window.S8b = () => T.reveal(1);
+
+const Z = Say('say', 'The browser uploads straight to storage with a signed URL, so photos never pass through our servers.');
+window.S9 = () => Z.show();
+</script>
+</body>
+</html>

@@ -1,0 +1,201 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="color-scheme" content="light">
+<title>Sweeper and reconciliation jobs: lecture</title>
+<link rel="stylesheet" href="../lib/lecture.css">
+<script src="../lib/icons.js"></script>
+<script src="../lib/lecture.js"></script>
+</head>
+<body>
+<script>
+Title({ num: 7, name: 'Sweeper + reconciliation', sub: 'Jobs on a timer that clean up', phase: 'Version 1', pills: ['Expired holds', 'Matching payments'] });
+
+// a small table drawn in SVG: rows fade in; cells can be rewritten and rows toned
+const SVGNS = 'http://www.w3.org/2000/svg';
+function mk(tag, attrs, parent) { const e = document.createElementNS(SVGNS, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); if (parent) parent.append(e); return e; }
+const FILL = { good: '#e6f4ea', bad: '#fdecee', warn: '#fff5d6', acc: '#e8eefb', '': '#fff' };
+function Table(d, x, y, cols, title) {
+  const g = mk('g', { transform: `translate(${x},${y})` }, d.nodes);
+  const W = cols.reduce((a, c) => a + c[1], 0), RH = 58;
+  if (title) { const t = mk('text', { x: 0, y: -18, style: 'font-size:30px;font-weight:700;fill:#5f6368' }, g); t.textContent = title; }
+  mk('rect', { width: W, height: RH, rx: 10, fill: '#e8eefb', stroke: '#2456c7', 'stroke-width': 2 }, g);
+  let cx = 0; cols.forEach(([n, w]) => { const t = mk('text', { x: cx + 18, y: 39, style: 'font-size:26px;font-weight:700;fill:#2456c7' }, g); t.textContent = n; cx += w; });
+  const rows = [];
+  return {
+    rows, at: i => ({ x: x + W / 2, y: y + RH * (i + 1.5) }), left: i => ({ x, y: y + RH * (i + 1.5) }), right: i => ({ x: x + W, y: y + RH * (i + 1.5) }),
+    add(vals, tone = '') {
+      const rg = mk('g', { transform: `translate(0,${RH * (rows.length + 1)})` }, g);
+      const rect = mk('rect', { width: W, height: RH, fill: FILL[tone], stroke: '#d6d2c8', 'stroke-width': 2, style: 'transition: fill .4s' }, rg);
+      const ts = []; let cx = 0;
+      vals.forEach((v, i) => { const t = mk('text', { x: cx + 18, y: 39, style: 'font-size:26px;font-weight:600;fill:#1d1d1f' }, rg); t.textContent = v; ts.push(t); cx += cols[i][1]; });
+      const row = { set: t => rect.setAttribute('fill', FILL[t || '']), cell: (i, v) => { ts[i].textContent = v; } };
+      rows.push(row); return row;
+    },
+  };
+}
+
+// ---- definition: a timer, a sweeper, a reconciler
+const D = Define('def', {
+  html: 'Small programs that run <b>on a timer</b> and clean up. A <b>sweeper</b> releases things that got <b>stuck</b>. <b>Reconciliation</b> compares your records with an <b>outside source</b> and fixes gaps.',
+  extra: { label: 'Run on a schedule, classically called cron', pills: ['Every minute', 'Every night'] },
+});
+const dd = D.d;
+dd.node('t', 160, 300, 'clock', 'Timer', 'every minute', { w: 170 });
+dd.node('s', 470, 300, 'sweep', 'Sweeper', '', { w: 170, hidden: true });
+dd.node('r', 790, 300, 'reconcile', 'Reconciler', 'nightly', { w: 190, hidden: true });
+dd.link('t', 's');
+const DT = Table(dd, 100, 540, [['hold', 170], ['expires', 250], ['status', 340]], 'holds');
+const drows = [['#101', 'in 6 min', 'held'], ['#102', 'expired', 'held'], ['#103', 'in 3 min', 'held'], ['#104', 'expired', 'held']].map(v => DT.add(v));
+window.SD = async () => {
+  D.show(); await sleep(600); dd.pop('s');
+  (await dd.ring('t', 1300)).remove();
+  await dd.send('t', 's', { dur: 600, color: 'warn' });
+  for (const i of [1, 3]) { await dd.send('s', DT.at(i), { dur: 700, color: 'good' }); drows[i].set('good'); drows[i].cell(2, 'released'); }
+  await sleep(1200); dd.pop('r'); dd.link('t', 'r', { curve: 120 });
+  dd.badge('r', 'ours vs Stripe', 'acc', 'bottom');
+};
+window.SD2 = () => D.more();
+
+// ---- the problem: abandoned holds, a lost webhook
+const P = Stage('prob', { caption: ['The problem', 'Checkout holds the pizzas, then sends you to Stripe'] });
+P.node('u', 190, 420, 'users', 'Customers', '', { w: 190 });
+P.node('api', 640, 420, 'server', 'API', '', { w: 170 });
+P.node('st', 1360, 420, 'card', 'Stripe', 'payment page', { w: 210 });
+P.node('stock', 640, 800, 'table', 'Pizzas', 'held: 0', { w: 230 });
+P.node('k', 1360, 800, 'building', 'Kitchen', '', { w: 200 });
+P.link('u', 'api'); P.link('api', 'stock'); P.link('u', 'st', { curve: 170 }); P.link('st', 'api', { dash: 1 }); P.link('api', 'k');
+window.S1 = async () => {
+  P.show(); await sleep(600);
+  await P.send('u', 'api', { dur: 700, label: 'checkout' });
+  await P.send('api', 'stock', { dur: 700, color: 'warn', label: 'hold 2 pizzas' });
+  P.rename('stock', 'Pizzas', 'held: 2'); P.tone('stock', 'warn');
+  await P.send('u', 'st', { dur: 1100, curve: 170, label: 'to payment page' });
+};
+window.S1b = async () => {
+  P.cap('Fifty customers walk away', 'Their pizzas stay held, so nobody can buy them');
+  for (let i = 1; i <= 25; i++) {
+    P.rename('stock', 'Pizzas', 'held by ' + (i * 2) + ' carts');
+    if (i % 6 === 1) P.tag('u', 'abandoned', 'muted');
+    await sleep(110);
+  }
+  P.tone('stock', 'bad'); P.badge('stock', 'not for sale', 'bad', 'bottom');
+};
+window.S1c = async () => {
+  P.cap('A webhook gets lost', 'Stripe\'s "paid" message never arrives');
+  P.tone('st', 'good'); P.tag('st', 'paid', 'good');
+  await sleep(700);
+  await P.send('st', { x: 1000, y: 420 }, { dur: 800, color: 'good', label: 'webhook: paid' });
+  const x = P.text(1000, 432, '✕ lost', { color: 'bad', size: 40 });
+  await sleep(900);
+  P.tone('k', 'bad'); P.badge('k', 'never cooked', 'bad', 'bottom');
+  await sleep(2500); x.remove();
+};
+
+// ---- how it works 1: the sweeper
+const M = Stage('how', { caption: ['The sweeper', 'Every minute: find the holds that have expired'] });
+M.node('t', 200, 330, 'clock', 'Timer', 'every minute', { w: 190 });
+M.node('s', 560, 330, 'sweep', 'Sweeper', '', { w: 190 });
+M.node('st', 1560, 330, 'card', 'Stripe', '', { w: 190 });
+M.link('t', 's'); M.link('s', 'st');
+const MT = Table(M, 330, 560, [['order', 180], ['pizzas', 170], ['expires', 240], ['status', 400]], 'holds');
+const mrows = [['#101', '2', 'in 6 min', 'held'], ['#102', '1', 'expired', 'held'], ['#103', '3', 'expired', 'held'], ['#104', '2', 'in 3 min', 'held']].map(v => MT.add(v));
+window.S2 = async () => {
+  M.show(); await sleep(500);
+  (await M.ring('t', 1200)).remove();
+  await M.send('t', 's', { dur: 600, color: 'warn' });
+  for (let i = 0; i < 4; i++) { await M.send('s', MT.at(i), { dur: 450, color: 'muted', r: 8 }); if (i === 1 || i === 2) { mrows[i].set('warn'); mrows[i].cell(3, 'expired: check'); } }
+};
+window.S2b = async () => {
+  M.cap('Ask Stripe before releasing', 'Not paid: back on sale. Paid: to the kitchen');
+  await M.send('s', 'st', { dur: 900, color: 'warn', label: '#102, #103 paid?' });
+  await M.send('st', 's', { dur: 900, color: 'good', label: '#102 no, #103 yes' });
+  await M.send('s', MT.at(1), { dur: 500, color: 'good' }); mrows[1].set('good'); mrows[1].cell(3, 'released: on sale');
+  await sleep(500);
+  await M.send('s', MT.at(2), { dur: 500, color: 'acc' }); mrows[2].set('acc'); mrows[2].cell(3, 'paid: to the kitchen');
+  M.badge('s', 'lost webhook caught', 'good', 'top');
+};
+
+// ---- how it works 2: nightly reconciliation
+const R = Stage('rec', { caption: ['Reconciliation, every night', 'Stripe\'s payments against our orders, one by one'] });
+const RA = Table(R, 160, 360, [['payment', 210], ['order', 150], ['amount', 170]], 'Stripe payments');
+const RB = Table(R, 1230, 360, [['order', 150], ['status', 230], ['amount', 150]], 'Our orders');
+const recs = [['pi_81', '#214', '$32', 'paid'], ['pi_82', '#215', '$18', 'paid'], ['pi_83', '#216', '$45', 'paid'], ['pi_84', '#218', '$24', 'waiting'], ['pi_85', '#219', '$27', 'paid']];
+const ra = recs.map(([p, o, a]) => RA.add([p, o, a])), rb = recs.map(([, o, a, s]) => RB.add([o, s, a]));
+const marks = [];
+window.S3 = async () => {
+  R.show(); await sleep(600);
+  for (let i = 0; i < recs.length; i++) {
+    await R.send(RA.right(i), RB.left(i), { dur: 450, color: i === 3 ? 'bad' : 'good', r: 8 });
+    marks.push(R.text(990, RA.at(i).y + 12, i === 3 ? '✕' : '✓', { color: i === 3 ? 'bad' : 'good', size: 40 }));
+    if (i === 3) { ra[i].set('bad'); rb[i].set('bad'); }
+  }
+};
+window.S3b = async () => {
+  R.cap('A payment with no paid order', 'The job marks order #218 paid');
+  await sleep(600);
+  rb[3].cell(1, 'paid (fixed)'); rb[3].set('good'); ra[3].set('good');
+  marks[3].textContent = '✓'; marks[3].setAttribute('fill', '#1a7f37');
+};
+
+// ---- what it's for
+const U = Cards('uses', {
+  head: 'What you use them for', items: [
+    { icon: 'timer', title: 'Expired holds', text: 'Stock, seats or bookings held during checkout.' },
+    { icon: 'hourglass', color: 'warn', title: 'Stuck orders', text: 'Like one marked "sending" for an hour.' },
+    { icon: 'reconcile', color: 'good', title: 'Matching payments', text: 'Your records against Stripe\'s.' },
+  ],
+});
+window.S4 = () => { U.show(); setTimeout(() => U.reveal(0), 300); };
+window.S4b = () => U.reveal(1);
+window.S4c = () => U.reveal(2);
+
+// ---- scenario: kickoff night, 50 abandoned checkouts and one lost webhook
+const S = Stage('scen', { caption: ['', ''] });
+S.text(480, 200, 'Without these jobs', { color: 'bad', size: 46 });
+S.text(1440, 200, 'With them', { color: 'good', size: 46 });
+S.node('lh', 480, 430, 'table', 'Pizzas held', 'by 50 abandoned carts', { w: 330 });
+S.node('lp', 480, 760, 'card', 'Paid order #218', 'webhook lost', { w: 330 });
+S.node('rh', 1300, 430, 'table', 'Pizzas held', 'by 50 abandoned carts', { w: 330 });
+S.node('rp', 1300, 760, 'card', 'Paid order #218', 'webhook lost', { w: 330 });
+S.node('sw', 1720, 595, 'sweep', 'Sweeper', 'every minute', { w: 200, hidden: true });
+S.text(960, 990, 'Pizza shop, kickoff night', { color: 'muted', size: 34, weight: 600 });
+['lh', 'lp', 'rh', 'rp'].forEach(k => S.tone(k, 'warn'));
+window.S5 = () => S.show();
+window.S5b = async () => {
+  S.tone('lh', 'bad'); S.tone('lp', 'bad');
+  S.rename('lh', 'Pizzas held', 'all night: lost sales'); S.rename('lp', 'Paid order #218', 'never cooked');
+  for (let i = 0; i < 3; i++) { S.tag('lh', 'not for sale', 'bad'); S.tag('lp', 'no dinner', 'bad'); await sleep(1200); }
+};
+window.S5c = async () => {
+  S.link('sw', 'rh'); S.link('sw', 'rp'); S.pop('sw'); await sleep(600);
+  await Promise.all([S.send('sw', 'rh', { dur: 600, color: 'good' }), S.send('sw', 'rp', { dur: 600, color: 'good' })]);
+  for (let n = 50; n >= 0; n -= 5) { S.rename('rh', 'Pizzas held', 'by ' + n + ' abandoned carts'); await sleep(90); }
+  S.tone('rh', 'good'); S.rename('rh', 'Back on sale', 'all 50 carts released');
+  S.tone('rp', 'good'); S.rename('rp', 'Paid order #218', 'Stripe says paid: cooking');
+};
+
+// ---- where it fits
+const Y = System('sys', { highlight: ['jobs', 'db', 'pay'] });
+Y.link('jobs', 'pay', { dash: 1 });
+window.S6 = async () => {
+  Y.show(); await sleep(700);
+  for (let i = 0; i < 3; i++) { Y.send('jobs', 'db', { dur: 700, color: 'warn' }); await sleep(500); Y.send('jobs', 'pay', { dur: 700, color: 'warn' }); await sleep(900); }
+};
+
+// ---- trade-offs
+const T = Cards('trade', {
+  head: 'Two things to know', cols: 2, items: [
+    { icon: 'lock', color: 'warn', title: 'One runner at a time', text: 'So two sweepers don\'t fight over the same hold.' },
+    { icon: 'retry', title: 'Safe to repeat', text: 'If a job dies halfway, the next run simply does it again.' },
+  ],
+});
+window.S7 = () => { T.show(); setTimeout(() => T.reveal(0), 300); };
+window.S7b = () => T.reveal(1);
+
+const Z = Say('say', 'Every minute, release expired holds, after asking Stripe whether they were paid.');
+window.S8 = () => Z.show();
+</script>
+</body>
+</html>

@@ -1,0 +1,139 @@
+{
+ "target": "index.html",
+ "viewport": [
+  1920,
+  1080
+ ],
+ "voice": "en-US-AndrewMultilingualNeural",
+ "rate": "+6%",
+ "pronounce": {
+  "API": "A P I",
+  "S3": "S three",
+  "CDN": "C D N",
+  "PDF": "P D F",
+  "URL": "U R L"
+ },
+ "load_ms": 1200,
+ "gap_ms": 400,
+ "tail_ms": 1500,
+ "cues": [
+  {
+   "say": "Component five: object storage.",
+   "post_ms": 900
+  },
+  {
+   "say": "Object storage is a cloud service for files. Each file, called an object, is saved under a name, in a container called a bucket. It's cheap, and practically unlimited.",
+   "post_ms": 1200,
+   "do": "js:setTimeout(SD, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "You rent it, from Amazon S3, Azure Blob Storage or Google Cloud Storage. Your database keeps only each file's name, a short line of text.",
+   "post_ms": 1100,
+   "do": "js:setTimeout(SD2, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "Why not send files to your own servers? A print shop customer uploads ten photos for holiday cards, four megabytes each.",
+   "post_ms": 700,
+   "do": "js:setTimeout(S1, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "Every byte passes through your API servers, and if you store the photos in the database, it bloats. Multiply by thousands of orders, and both clog.",
+   "post_ms": 1200,
+   "do": "js:setTimeout(S1b, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "The fix is a signed URL: a temporary link that lets someone upload or download one file directly. The API signs ten upload links, each valid for, say, fifteen minutes.",
+   "post_ms": 900,
+   "do": "js:setTimeout(S2, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "The browser sends the photos straight to storage. Not one byte of them touches your servers.",
+   "post_ms": 1100,
+   "do": "js:setTimeout(S3, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "Then the browser tells the API it's done, and the database saves ten short names.",
+   "post_ms": 700,
+   "do": "js:setTimeout(S3b, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "Later, a worker fetches the photos by name, and prints the cards.",
+   "post_ms": 1200,
+   "do": "js:setTimeout(S3c, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "So what do you use it for? Uploads, like photos and videos.",
+   "post_ms": 500,
+   "do": "js:setTimeout(S4, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "Files you generate, like PDF invoices and exports, shared with a signed download link.",
+   "post_ms": 500,
+   "do": "js:setTimeout(S4b, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "And public files, served to everyone through a CDN.",
+   "post_ms": 1200,
+   "do": "js:setTimeout(S4c, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "Now the numbers. Ten photos at four megabytes is forty megabytes per order. A thousand holiday orders is forty gigabytes.",
+   "post_ms": 1100,
+   "do": "js:setTimeout(S5, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "Without object storage, all forty gigabytes flow through your API servers.",
+   "post_ms": 700,
+   "do": "js:setTimeout(S6, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "With signed links, the servers handle only links and names, about ten megabytes. Storage takes the forty gigabytes, which is exactly what it's built for.",
+   "post_ms": 1200,
+   "do": "js:setTimeout(S6b, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "Here's where it sits: off to the side. The browser uploads to it directly.",
+   "post_ms": 700,
+   "do": "js:setTimeout(S7, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "And when files go out, the CDN serves them, with storage as its source.",
+   "post_ms": 1200,
+   "do": "js:setTimeout(S7b, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "Two things to know. Keep the bucket private, and hand out signed links that expire. A public bucket leaks every customer's files.",
+   "post_ms": 700,
+   "do": "js:setTimeout(S8, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "And files are written whole. You replace a file; you don't edit part of it.",
+   "post_ms": 1200,
+   "do": "js:setTimeout(S8b, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "In the interview, say: the browser uploads straight to storage with a signed URL, so photos never pass through our servers.",
+   "post_ms": 600,
+   "do": "js:setTimeout(S9, 0)",
+   "settle_ms": 350
+  }
+ ]
+}

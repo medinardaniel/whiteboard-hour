@@ -1,0 +1,214 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="color-scheme" content="light">
+<title>Queue and workers: lecture</title>
+<link rel="stylesheet" href="../lib/lecture.css">
+<script src="../lib/icons.js"></script>
+<script src="../lib/lecture.js"></script>
+</head>
+<body>
+<script>
+Title({ num: 6, name: 'Queue + workers', sub: 'A to-do list for slow work', phase: 'Version 1', pills: ['Emails and texts', 'Anything that can lag'] });
+
+// ---- definition: the API writes a note and replies; workers do the work
+const D = Define('def', {
+  html: 'A <b>to-do list for slow work</b>. The server writes a note, a <b>message</b>, and <b>replies at once</b>. Background programs called <b>workers</b> pick up the messages and do the work.',
+  extra: { label: 'You rent the queue:', pills: ['Amazon SQS', 'Azure Service Bus', 'Google Cloud Tasks'] },
+});
+const dd = D.d;
+dd.node('u', 170, 260, 'user', 'Customer', '', { w: 160 });
+dd.node('api', 170, 560, 'server', 'API', '', { w: 160 });
+dd.queue('q', 480, 560, 6, 'Queue');
+dd.node('w1', 820, 400, 'gear', 'Worker', '', { w: 150, hidden: true });
+dd.node('w2', 820, 720, 'gear', 'Worker', '', { w: 150, hidden: true });
+dd.link('u', 'api'); dd.link('api', 'q'); dd.link('q', 'w1'); dd.link('q', 'w2');
+let defA, defB;
+window.SD = async () => {
+  D.show(); await sleep(900); dd.popAll(['w1', 'w2'], 300); await sleep(700);
+  defA = setInterval(async () => {
+    await dd.send('u', 'api', { dur: 450, r: 9 });
+    dd.send('api', 'u', { dur: 400, r: 9, color: 'good' });
+    await dd.send('api', 'q', { dur: 450, r: 9 });
+    dd.fill('q', dd.N.q.n + 1);
+  }, 1000);
+  await sleep(2500);
+  let k = 0;
+  defB = setInterval(() => {
+    if (dd.N.q.n < 1) return;
+    dd.fill('q', dd.N.q.n - 1); const w = ++k % 2 ? 'w1' : 'w2';
+    dd.send('q', w, { dur: 500, r: 9, color: 'good' }).then(() => dd.tag(w, 'done', 'good', -80));
+  }, 1250);
+};
+window.SD2 = () => D.more();
+
+// ---- the problem: the customer waits on the text provider
+const P = Stage('prob', { caption: ['The problem', 'Checkout waits for the confirmation text'] });
+P.node('u', 220, 560, 'user', 'Customer', 'just paid', { w: 200 });
+P.node('api', 820, 560, 'server', 'API', '', { w: 180 });
+P.node('sms', 1460, 560, 'chat', 'Text provider', 'takes 1 to 2 s', { w: 240 });
+P.link('u', 'api'); P.link('api', 'sms');
+window.S1 = async () => {
+  clearInterval(defA); clearInterval(defB);
+  P.show(); await sleep(600);
+  await P.send('u', 'api', { dur: 700, label: 'pay' });
+  P.send('api', 'sms', { dur: 700, label: 'send text' });
+  P.badge('u', 'waiting...', 'warn');
+  const ring = await P.ring('u', 2600);
+  ring.remove(); P.unbadge('u');
+  await P.send('sms', 'api', { dur: 500, color: 'good' });
+  await P.send('api', 'u', { dur: 600, color: 'good', label: 'confirmed' });
+};
+window.S1b = async () => {
+  P.cap('The provider times out', 'Now a paid order shows an error');
+  await P.send('u', 'api', { dur: 600, label: 'pay' });
+  P.send('api', 'sms', { dur: 600, label: 'send text' });
+  P.badge('u', 'waiting...', 'warn');
+  P.ring('u', 2400).then(c => { c.remove(); P.unbadge('u'); });
+  await sleep(1400); P.tone('sms', 'bad'); P.tag('sms', 'timeout', 'bad');
+  await sleep(1000);
+  await P.send('api', 'u', { dur: 600, color: 'bad' });
+  P.tone('u', 'bad'); P.badge('u', 'checkout error', 'bad');
+};
+
+// ---- how it works
+const M = Stage('how', { caption: ['Write a message, reply at once', 'The API queues the work and confirms'] });
+M.node('u', 170, 420, 'user', 'Customer', '', { w: 170 });
+M.node('api', 480, 420, 'server', 'API', '', { w: 160 });
+M.queue('q', 870, 420, 8, 'Queue');
+M.node('w1', 1300, 300, 'gear', 'Worker 1', '', { w: 180 });
+M.node('w2', 1300, 580, 'gear', 'Worker 2', '', { w: 180, hidden: true });
+M.node('sms', 1700, 420, 'chat', 'Text provider', '', { w: 210 });
+M.queue('dlq', 870, 820, 4, 'Dead-letter queue');
+M.N.dlq.g.style.opacity = 0;
+M.node('bell', 1300, 840, 'bell', 'Alert', 'someone looks', { w: 200, hidden: true });
+M.link('u', 'api'); M.link('api', 'q'); M.link('q', 'w1'); M.link('w1', 'sms');
+window.S2 = async () => {
+  M.show(); await sleep(600);
+  await M.send('u', 'api', { dur: 600, label: 'pay' });
+  M.send('api', 'u', { dur: 500, color: 'good', label: 'confirmed' }).then(() => M.tag('u', 'instant', 'good'));
+  await M.send('api', 'q', { dur: 600, color: 'warn', label: 'text order 42' });
+  M.fill('q', 1, 'warn');
+};
+window.S2b = async () => {
+  M.cap('A worker does the slow part', 'If it fails, the message goes back and is retried');
+  await sleep(300);
+  M.fill('q', 0); await M.send('q', 'w1', { dur: 600, color: 'warn', label: 'order 42' });
+  await M.send('w1', 'sms', { dur: 600, color: 'warn' });
+  M.tone('sms', 'bad'); M.tag('sms', 'timeout', 'bad');
+  await M.send('w1', 'q', { dur: 600, color: 'warn', label: 'back, retry later' });
+  M.fill('q', 1, 'warn'); M.tone('sms', '');
+  await sleep(900);
+  M.fill('q', 0); await M.send('q', 'w1', { dur: 600, color: 'warn' });
+  await M.send('w1', 'sms', { dur: 600, color: 'good' });
+  M.tone('sms', 'good'); M.tag('sms', 'text sent', 'good');
+};
+window.S3 = async () => {
+  M.cap('At-least-once delivery', 'The same message can be handed out twice');
+  M.tone('sms', ''); M.link('q', 'w2'); M.link('w2', 'sms'); M.pop('w2');
+  M.fill('q', 1, 'warn'); await sleep(800);
+  M.fill('q', 0);
+  await Promise.all([M.send('q', 'w1', { dur: 700, color: 'warn', label: 'order 42' }), M.send('q', 'w2', { dur: 900, color: 'warn', label: 'order 42' })]);
+  await M.send('w1', 'sms', { dur: 600, color: 'good' }); M.tag('sms', 'text sent', 'good');
+  M.badge('w2', 'order 42 again', 'warn', 'bottom');
+};
+window.S3b = async () => {
+  M.cap('So workers must be idempotent', 'Running twice has the same effect as once');
+  M.unbadge('w2'); M.tone('w2', 'good');
+  M.badge('w2', 'already sent: skip', 'good', 'bottom');
+};
+window.S4 = async () => {
+  M.cap('Dead-letter queue', 'After 5 failures, park the message and alert');
+  M.unbadge('w2'); M.tone('w2', ''); M.dim(['w2']);
+  M.N.dlq.g.style.opacity = 1; M.link('w1', 'dlq');
+  for (let i = 1; i <= 5; i++) {
+    M.fill('q', 1, 'bad'); M.fill('q', 0);
+    M.badge('w1', 'try ' + i + ' of 5', 'bad');
+    await M.send('q', 'w1', { dur: 350, color: 'bad', label: i === 1 ? 'order 57' : '' });
+    await M.send('w1', 'sms', { dur: 350, color: 'bad' });
+    M.tone('sms', 'bad');
+    await sleep(250); M.tone('sms', '');
+  }
+  M.unbadge('w1');
+  await M.send('w1', 'dlq', { dur: 800, color: 'bad', label: 'order 57' });
+  M.fill('dlq', 1, 'bad'); M.link('dlq', 'bell'); M.pop('bell'); M.tone('bell', 'bad'); M.tag('bell', 'alert', 'bad', -80);
+};
+
+// ---- what it's for
+const U = Cards('uses', {
+  head: 'Anything that can lag a little', items: [
+    { icon: 'envelope', title: 'Emails and texts', text: 'Confirmations, reminders, receipts.' },
+    { icon: 'photo', title: 'Image processing', text: 'Resize the photos a user uploads.' },
+    { icon: 'doc', title: 'Reports and exports', text: 'Nobody needs them in the same second.' },
+  ],
+});
+window.S5 = () => { U.show(); setTimeout(() => U.reveal(0), 300); };
+window.S5b = () => U.reveal(1);
+window.S5c = () => U.reveal(2);
+
+// ---- scenario: 900 orders in 30 minutes at kickoff
+const S = Stage('scen', { caption: ['Kickoff: 900 orders in 30 minutes', 'Each paid order queues one text'] });
+S.node('o', 170, 560, 'users', 'Orders', '', { w: 170 });
+S.node('api', 450, 560, 'server', 'API', '', { w: 160 });
+S.queue('q', 980, 560, 14, 'Queue: texts to send');
+['1', '2', '3', '4'].forEach((n, i) => S.node('w' + n, 1640, 320 + i * 160, 'gear', 'Worker ' + n, '', { w: 190, hidden: i > 1 }));
+S.link('o', 'api'); S.link('api', 'q'); S.link('q', 'w1'); S.link('q', 'w2');
+const tOrders = S.text(980, 790, 'orders: 0', { size: 38 });
+const tSent = S.text(980, 850, 'texts sent: 0', { size: 38, color: 'good' });
+const sim = { orders: 0, sent: 0, workers: ['w1', 'w2'], arrive: 0, id: null, wid: null };
+function draw() {
+  tOrders.textContent = 'orders: ' + sim.orders; tSent.textContent = 'texts sent: ' + sim.sent;
+  S.fill('q', Math.min(13, Math.ceil((sim.orders - sim.sent) / 15)), 'warn');
+}
+function startSim() {
+  sim.id = setInterval(() => {
+    const add = Math.min(sim.arrive, 900 - sim.orders);
+    if (add > 0) { sim.orders += add; S.send('o', 'api', { dur: 400, r: 9 }).then(() => S.send('api', 'q', { dur: 400, r: 9, color: 'warn' })); }
+    draw();
+  }, 250);
+  let k = 0;
+  sim.wid = setInterval(() => {
+    const w = sim.workers[k++ % sim.workers.length];
+    const take = Math.min(sim.orders - sim.sent, 5 * sim.workers.length);
+    if (take <= 0) return;
+    sim.sent += take; S.send('q', w, { dur: 500, r: 10, color: 'good' }); draw();
+  }, 300);
+}
+window.S6 = () => {
+  S.show(); sim.arrive = 12; startSim();
+  S.badge('api', 'confirms instantly', 'good');
+};
+window.S6b = () => {
+  S.cap('Texts lag a few minutes', 'Checkout stays instant, and no text is lost');
+  setTimeout(() => S.badge('q', 'texts ~3 min behind', 'warn'), 1500);
+};
+window.S6c = () => {
+  S.cap('The queue keeps growing? Add workers', 'Queue length is the signal');
+  S.unbadge('q'); S.link('q', 'w3'); S.link('q', 'w4'); S.popAll(['w3', 'w4'], 300);
+  setTimeout(() => sim.workers.push('w3', 'w4'), 600);
+};
+
+// ---- where it fits
+const Y = System('sys', { highlight: ['queue', 'worker', 'sms'] });
+window.S7 = async () => {
+  clearInterval(sim.id); clearInterval(sim.wid);
+  Y.show(); await sleep(600);
+  for (let i = 0; i < 3; i++) { Y.flow(['api', 'queue', 'worker', 'sms'], { dur: 550 }); await sleep(1000); }
+};
+
+// ---- trade-offs
+const T = Cards('trade', {
+  head: 'Two things to know', cols: 2, items: [
+    { icon: 'db', color: 'warn', title: 'Use an outbox', text: 'Save the message in the same transaction as the order, or a crash can lose it.' },
+    { icon: 'log', title: 'No Kafka needed', text: 'A replayable log for many readers. Overkill here.' },
+  ],
+});
+window.S8 = () => { T.show(); setTimeout(() => T.reveal(0), 300); };
+window.S8b = () => T.reveal(1);
+
+const Z = Say('say', 'At-least-once delivery, plus workers that are safe to run twice.');
+window.S9 = () => Z.show();
+</script>
+</body>
+</html>

@@ -1,0 +1,135 @@
+{
+ "target": "index.html",
+ "viewport": [
+  1920,
+  1080
+ ],
+ "voice": "en-US-AndrewMultilingualNeural",
+ "rate": "+6%",
+ "pronounce": {
+  "API": "A P I"
+ },
+ "load_ms": 1200,
+ "gap_ms": 400,
+ "tail_ms": 1500,
+ "cues": [
+  {
+   "say": "Component seven: sweeper and reconciliation jobs.",
+   "post_ms": 900
+  },
+  {
+   "say": "These are small programs that run on a timer and clean up. A sweeper releases things that got stuck. A reconciliation job compares your records with an outside source, and fixes any gaps.",
+   "post_ms": 1200,
+   "do": "js:setTimeout(SD, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "Like closing time at a shop, when you count the till against the receipts. Running a program on a schedule is classically called cron.",
+   "post_ms": 1100,
+   "do": "js:setTimeout(SD2, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "Why do you need them? At the pizza shop, checkout puts a hold on the pizzas, then sends the customer to Stripe's payment page.",
+   "post_ms": 700,
+   "do": "js:setTimeout(S1, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "Fifty customers abandon that page. Their pizzas stay held, and nobody else can buy them.",
+   "post_ms": 900,
+   "do": "js:setTimeout(S1b, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "Worse, one customer pays, but Stripe's webhook, the message that says paid, never arrives. That order is never cooked.",
+   "post_ms": 1200,
+   "do": "js:setTimeout(S1c, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "The sweeper runs every minute, and finds the holds that have expired.",
+   "post_ms": 700,
+   "do": "js:setTimeout(S2, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "Before releasing one, it asks Stripe: was this paid? If not, the pizzas go back on sale. If it was, the order goes to the kitchen. That catches the lost webhook.",
+   "post_ms": 1200,
+   "do": "js:setTimeout(S2b, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "Reconciliation is the nightly safety net. It lists Stripe's payments, and compares them with your orders, one by one.",
+   "post_ms": 700,
+   "do": "js:setTimeout(S3, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "Here's a payment with no matching paid order. The job marks the order paid, so nothing is left hanging.",
+   "post_ms": 1200,
+   "do": "js:setTimeout(S3b, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "You use them for expired holds, on stock, seats or bookings,",
+   "post_ms": 400,
+   "do": "js:setTimeout(S4, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "for stuck orders, like one that's been sending for an hour,",
+   "post_ms": 400,
+   "do": "js:setTimeout(S4b, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "and for matching payments against an outside record.",
+   "post_ms": 1200,
+   "do": "js:setTimeout(S4c, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "Now the real case. Kickoff night: fifty customers abandon the Stripe page, and one paid order's webhook is lost.",
+   "post_ms": 800,
+   "do": "js:setTimeout(S5, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "Without these jobs, those pizzas stay held all night, and the paying customer never gets dinner.",
+   "post_ms": 800,
+   "do": "js:setTimeout(S5b, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "With them, within a minute of the holds expiring, all fifty carts are released and back on sale, and the paid order reaches the kitchen.",
+   "post_ms": 1200,
+   "do": "js:setTimeout(S5c, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "Here's where it sits: off to the side, on a timer. The jobs read the database and ask Stripe, but no customer ever waits on them.",
+   "post_ms": 1200,
+   "do": "js:setTimeout(S6, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "Two things to know. Run one copy of each job at a time, so two sweepers don't fight over the same hold.",
+   "post_ms": 700,
+   "do": "js:setTimeout(S7, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "And make every fix safe to repeat. If a job dies halfway, the next run simply does it again.",
+   "post_ms": 1200,
+   "do": "js:setTimeout(S7b, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "In the interview, say: every minute, release expired holds, after asking Stripe whether they were paid.",
+   "post_ms": 600,
+   "do": "js:setTimeout(S8, 0)",
+   "settle_ms": 350
+  }
+ ]
+}

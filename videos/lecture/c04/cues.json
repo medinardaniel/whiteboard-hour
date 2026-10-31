@@ -1,0 +1,137 @@
+{
+ "target": "index.html",
+ "viewport": [
+  1920,
+  1080
+ ],
+ "voice": "en-US-AndrewMultilingualNeural",
+ "rate": "+6%",
+ "pronounce": {
+  "API": "A P I",
+  "DynamoDB": "Dynamo D B",
+  "ID": "I D"
+ },
+ "load_ms": 1200,
+ "gap_ms": 400,
+ "tail_ms": 1500,
+ "cues": [
+  {
+   "say": "Component four: Postgres, the managed relational database.",
+   "post_ms": 900
+  },
+  {
+   "say": "Postgres is the standard relational database. It stores your data as tables of rows, and lets many users change them at the same time without corrupting anything. It's your source of truth.",
+   "post_ms": 1200,
+   "do": "js:setTimeout(SD, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "And managed means you rent it. The cloud handles backups, patches and recovery for you.",
+   "post_ms": 1100,
+   "do": "js:setTimeout(SD2, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "Why do you need its guarantees? Booking a tire bay takes two writes: save the booking, and mark the bay as taken.",
+   "post_ms": 700,
+   "do": "js:setTimeout(S1, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "If the server crashes between them, the booking exists, but the bay still looks free.",
+   "post_ms": 900,
+   "do": "js:setTimeout(S1b, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "And if two customers click the same slot at the same instant, both can get it.",
+   "post_ms": 1200,
+   "do": "js:setTimeout(S1c, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "Postgres fixes the first problem with a transaction: a group of changes that succeed or fail as a unit. When it commits, both are kept.",
+   "post_ms": 900,
+   "do": "js:setTimeout(S2, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "If anything fails halfway, the database rolls back, as if nothing had happened.",
+   "post_ms": 1200,
+   "do": "js:setTimeout(S2b, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "It fixes the second with a constraint: a rule the database itself enforces. Here, every email must be unique.",
+   "post_ms": 700,
+   "do": "js:setTimeout(S3, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "Two sign-ups with the same email arrive together. The first insert wins. The second breaks the rule, so Postgres rejects it.",
+   "post_ms": 1200,
+   "do": "js:setTimeout(S3b, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "So what goes in it? The facts that must never be wrong: orders, payments, stock counts, bookings, accounts.",
+   "post_ms": 700,
+   "do": "js:setTimeout(S4, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "Photos, slow work and hot reads belong elsewhere.",
+   "post_ms": 1200,
+   "do": "js:setTimeout(S4b, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "Now the real case. Saturday, nine in the morning: the tire shop has one bay left, and two customers click it at the same instant.",
+   "post_ms": 700,
+   "do": "js:setTimeout(S5, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "Customer A's transaction commits. The booking is saved and the bay is marked taken, together.",
+   "post_ms": 700,
+   "do": "js:setTimeout(S5b, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "Customer B's insert breaks the unique rule on bay and time. It rolls back, and B is offered the next free slot, nine thirty.",
+   "post_ms": 1200,
+   "do": "js:setTimeout(S5c, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "And the load? Even at peak, the shop makes a few writes a second. One Postgres handles thousands. One database is plenty.",
+   "post_ms": 1200,
+   "do": "js:setTimeout(S5d, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "Here's where it sits: behind the API. Every API copy, and every background job, uses this one database.",
+   "post_ms": 1200,
+   "do": "js:setTimeout(S6, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "Two things to know. Why not DynamoDB? It's built for huge-scale lookups by ID, but changing two rows together is clunky.",
+   "post_ms": 700,
+   "do": "js:setTimeout(S7, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "And every frequent query needs an index: a sorted lookup, so the query doesn't read every row.",
+   "post_ms": 1200,
+   "do": "js:setTimeout(S7b, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "In the interview, say: Postgres, not DynamoDB. My write changes two rows together, and one database is plenty at these numbers.",
+   "post_ms": 600,
+   "do": "js:setTimeout(S8, 0)",
+   "settle_ms": 350
+  }
+ ]
+}

@@ -1,0 +1,217 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="color-scheme" content="light">
+<title>Postgres: lecture</title>
+<link rel="stylesheet" href="../lib/lecture.css">
+<script src="../lib/icons.js"></script>
+<script src="../lib/lecture.js"></script>
+</head>
+<body>
+<script>
+Title({ num: 4, name: 'Postgres', sub: 'The managed relational database', phase: 'Version 1', pills: ['Orders, payments, stock', 'Your source of truth'] });
+
+// a small table drawn in SVG: rows fade in, can be toned or removed
+const SVGNS = 'http://www.w3.org/2000/svg';
+function mk(tag, attrs, parent) { const e = document.createElementNS(SVGNS, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); if (parent) parent.append(e); return e; }
+const FILL = { good: '#e6f4ea', bad: '#fdecee', warn: '#fff5d6', '': '#fff' };
+function Table(d, x, y, cols, title) {
+  const g = mk('g', { transform: `translate(${x},${y})` }, d.nodes);
+  const W = cols.reduce((a, c) => a + c[1], 0), RH = 58;
+  if (title) { const t = mk('text', { x: 0, y: -18, style: 'font-size:30px;font-weight:700;fill:#5f6368' }, g); t.textContent = title; }
+  mk('rect', { width: W, height: RH, rx: 10, fill: '#e8eefb', stroke: '#2456c7', 'stroke-width': 2 }, g);
+  let cx = 0; cols.forEach(([n, w]) => { const t = mk('text', { x: cx + 18, y: 39, style: 'font-size:26px;font-weight:700;fill:#2456c7' }, g); t.textContent = n; cx += w; });
+  const rows = [];
+  return {
+    W, RH, x, y,
+    at: i => ({ x: x + W / 2, y: y + RH * (i + 1.5) }),
+    add(vals, tone = '') {
+      const ry = RH * (rows.length + 1);
+      const rg = mk('g', { transform: `translate(0,${ry})`, style: 'transition: opacity .4s', opacity: 0 }, g);
+      const rect = mk('rect', { width: W, height: RH, fill: FILL[tone], stroke: '#d6d2c8', 'stroke-width': 2, style: 'transition: fill .4s' }, rg);
+      let cx = 0; vals.forEach((v, i) => { const t = mk('text', { x: cx + 18, y: 39, style: 'font-size:26px;font-weight:600;fill:#1d1d1f' }, rg); t.textContent = v; cx += cols[i][1]; });
+      requestAnimationFrame(() => requestAnimationFrame(() => rg.setAttribute('opacity', 1)));
+      const row = { g: rg, set: t => rect.setAttribute('fill', FILL[t || '']), remove: () => { rg.setAttribute('opacity', 0); setTimeout(() => rg.remove(), 450); rows.splice(rows.indexOf(row), 1); } };
+      rows.push(row); return row;
+    },
+  };
+}
+
+// ---- definition: tables of rows, many writers at once
+const D = Define('def', {
+  html: 'The standard <b>relational database</b>: your data as <b>tables of rows</b> that many users can change <b>at once</b> without corrupting anything. Your <b>source of truth</b>.',
+  extra: { label: 'Managed: the cloud runs it for you', pills: ['Amazon RDS', 'Azure Database for PostgreSQL', 'Google Cloud SQL'] },
+});
+const dd = D.d;
+dd.node('a', 230, 250, 'user', 'Ana', '', { w: 150, hidden: true });
+dd.node('b', 480, 250, 'user', 'Ben', '', { w: 150, hidden: true });
+dd.node('c', 730, 250, 'user', 'Cy', '', { w: 150, hidden: true });
+const DT = Table(dd, 150, 500, [['bay', 170], ['time', 190], ['customer', 300]], 'bookings table');
+window.SD = async () => {
+  D.show();
+  dd.popAll(['a', 'b', 'c'], 250);
+  await sleep(1400);
+  const who = [['a', 'Bay 1', 'Sat 9:00', 'Ana'], ['b', 'Bay 2', 'Sat 9:00', 'Ben'], ['c', 'Bay 1', 'Sat 9:30', 'Cy'], ['a', 'Bay 3', 'Sat 10:00', 'Ana'], ['b', 'Bay 2', 'Sat 11:00', 'Ben']];
+  for (let i = 0; i < who.length; i++) {
+    const [k, ...v] = who[i];
+    dd.send(k, DT.at(i), { dur: 700, color: 'good' }).then(() => DT.add(v));
+    await sleep(i % 2 ? 900 : 300);
+  }
+};
+window.SD2 = () => D.more();
+
+// ---- the problem: two writes, a crash in between; and a double booking
+const P = Stage('prob', { caption: ['The problem', 'Booking a bay takes two writes'] });
+P.node('u1', 160, 360, 'user', 'Customer A', '', { w: 190, hidden: true });
+P.node('u2', 160, 760, 'user', 'Customer B', '', { w: 190, hidden: true });
+P.node('api', 620, 560, 'server', 'Booking server', '', { w: 230 });
+P.node('bk', 1360, 360, 'table', 'bookings', 'who booked what', { w: 250 });
+P.node('bays', 1360, 760, 'table', 'bays', 'which are taken', { w: 250 });
+P.link('api', 'bk'); P.link('api', 'bays');
+window.S1 = async () => {
+  P.show(); await sleep(600);
+  P.send('api', 'bk', { dur: 1100, color: 'good', label: 'save booking' });
+  await sleep(500);
+  await P.send('api', 'bays', { dur: 1100, color: 'good', label: 'mark bay taken' });
+  P.badge('bk', 'saved', 'good'); P.badge('bays', 'taken', 'good');
+};
+window.S1b = async () => {
+  P.unbadge('bk'); P.unbadge('bays');
+  P.cap('A crash in between', 'One write lands, the other never happens');
+  await P.send('api', 'bk', { dur: 1000, color: 'good', label: 'save booking' });
+  P.badge('bk', 'booking saved', 'good');
+  P.tone('api', 'bad'); P.rename('api', 'Booking server', ''); P.tag('api', 'crash', 'bad');
+  await sleep(700);
+  P.badge('bays', 'bay still free', 'bad');
+};
+window.S1c = async () => {
+  P.unbadge('bk'); P.unbadge('bays'); P.tone('api', '');
+  P.cap('Two clicks, same instant', 'Both see the slot free, both get it');
+  P.link('u1', 'api'); P.link('u2', 'api'); P.pop('u1'); P.pop('u2');
+  await sleep(700);
+  await Promise.all([P.send('u1', 'api', { dur: 800, label: 'Sat 9 AM' }), P.send('u2', 'api', { dur: 800, label: 'Sat 9 AM' })]);
+  await Promise.all([P.send('api', 'bk', { dur: 900, color: 'bad', curve: 40 }), P.send('api', 'bk', { dur: 900, color: 'bad', curve: -40 })]);
+  P.tone('bk', 'bad'); P.badge('bk', 'booked twice', 'bad');
+};
+
+// ---- how it works 1: the transaction
+const M = Stage('how', { caption: ['A transaction', 'Several changes that succeed or fail as a unit'] });
+M.node('api', 330, 400, 'server', 'Booking server', '', { w: 230 });
+M.node('bk', 1450, 330, 'table', 'bookings', '', { w: 240 });
+M.node('bays', 1450, 690, 'table', 'bays', '', { w: 240 });
+M.link('api', 'bk'); M.link('api', 'bays');
+const P1 = Panel(M, { x: 110, y: 560, w: 600, title: 'Transaction 1', items: ['BEGIN', 'insert booking', 'mark bay 2 taken', 'COMMIT: both kept'] });
+const P2 = Panel(M, { x: 110, y: 560, w: 600, title: 'Transaction 2', items: ['BEGIN', 'insert booking', 'mark bay 3 taken', 'crash: ROLLBACK, both undone'] });
+P2.el.style.display = 'none';
+window.S2 = async () => {
+  M.show(); await sleep(500);
+  P1.on(0); await sleep(500);
+  P1.on(1); await M.send('api', 'bk', { dur: 900, color: 'warn', label: 'insert' });
+  M.badge('bk', 'pending', 'warn');
+  P1.on(2); await M.send('api', 'bays', { dur: 900, color: 'warn', label: 'update' });
+  M.badge('bays', 'pending', 'warn');
+  await sleep(300); P1.on(3);
+  M.badge('bk', 'kept', 'good'); M.badge('bays', 'kept', 'good'); M.tone('bk', 'good'); M.tone('bays', 'good');
+};
+window.S2b = async () => {
+  M.cap('Fails halfway? Rollback', 'As if nothing had happened');
+  M.unbadge('bk'); M.unbadge('bays'); M.tone('bk', ''); M.tone('bays', '');
+  P1.el.style.display = 'none'; P2.el.style.display = '';
+  P2.on(0); await sleep(300);
+  P2.on(1); await M.send('api', 'bk', { dur: 900, color: 'warn', label: 'insert' });
+  M.badge('bk', 'pending', 'warn');
+  P2.on(2); M.tone('api', 'bad'); M.tag('api', 'crash', 'bad');
+  await sleep(800); P2.on(3);
+  M.unbadge('bk'); M.tag('bk', 'undone', 'warn'); M.badge('bays', 'untouched', 'muted');
+};
+
+// ---- how it works 2: a unique constraint
+const C = Stage('cons', { caption: ['A constraint', 'A rule the database itself enforces'] });
+C.node('a', 230, 400, 'user', 'Sign-up 1', 'double click', { w: 210 });
+C.node('b', 230, 740, 'user', 'Sign-up 2', 'same instant', { w: 210 });
+const CT = Table(C, 820, 380, [['id', 120], ['email', 520], ['name', 220]], 'accounts table');
+CT.add(['1', 'ana@mail.com', 'Ana']); CT.add(['2', 'ben@mail.com', 'Ben']);
+const rule = C.text(1250, 300, 'UNIQUE (email)', { color: 'bad', size: 40 });
+rule.setAttribute('opacity', 0);
+window.S3 = async () => { C.show(); await sleep(800); rule.setAttribute('opacity', 1); };
+window.S3b = async () => {
+  C.cap('The duplicate is rejected', 'First insert wins; the second breaks the rule');
+  const tgt = CT.at(2);
+  await Promise.all([C.send('a', tgt, { dur: 1100, color: 'good', label: 'cy@mail.com' }), C.send('b', { x: tgt.x - 60, y: tgt.y + 60 }, { dur: 1100, color: 'bad', label: 'cy@mail.com' })]);
+  CT.add(['3', 'cy@mail.com', 'Cy'], 'good');
+  await C.send({ x: tgt.x - 60, y: tgt.y + 60 }, 'b', { dur: 900, color: 'bad' });
+  C.tag('b', 'rejected: duplicate', 'bad'); C.tone('b', 'bad');
+  await sleep(1200); C.tag('b', 'rejected: duplicate', 'bad');
+};
+
+// ---- what goes in it
+const U = Sort('uses', {
+  head: 'What goes in Postgres?', left: '✓ In Postgres', right: '→ Somewhere else',
+  items: [['Orders', 'l'], ['Payments', 'l'], ['Stock counts', 'l'], ['Bookings', 'l'], ['Accounts', 'l'],
+    ['Photos, PDFs', 'r'], ['Slow work', 'r'], ['Hot reads', 'r']],
+});
+window.S4 = () => { U.show(); U.left(450); };
+window.S4b = () => U.right(600);
+
+// ---- scenario: the 9 AM Saturday slot
+const S = Stage('scen', { caption: ['Tire shop: Saturday 9 AM', 'Two customers click the last bay at the same instant'] });
+S.node('a', 170, 400, 'user', 'Customer A', '', { w: 200 });
+S.node('b', 170, 760, 'user', 'Customer B', '', { w: 200 });
+S.node('api', 560, 580, 'server', 'API', '', { w: 170 });
+S.node('db', 900, 580, 'db', 'Postgres', '', { w: 190 });
+S.link('a', 'api'); S.link('b', 'api'); S.link('api', 'db');
+const ST = Table(S, 1130, 420, [['bay', 150], ['time', 230], ['customer', 280]], 'bookings · UNIQUE (bay, time)');
+ST.add(['Bay 1', 'Sat 9:00', 'Dev']);
+window.S5 = async () => {
+  S.show(); await sleep(700);
+  await Promise.all([S.send('a', 'api', { dur: 900, label: 'Bay 2, 9:00' }), S.send('b', 'api', { dur: 900, label: 'Bay 2, 9:00' })]);
+  await Promise.all([S.send('api', 'db', { dur: 700 }), S.send('api', 'db', { dur: 700, curve: 40 })]);
+};
+window.S5b = async () => {
+  S.cap('Customer A\'s transaction commits', 'Insert the booking and mark the bay taken, together');
+  await S.send('db', ST.at(1), { dur: 800, color: 'good' });
+  ST.add(['Bay 2', 'Sat 9:00', 'A'], 'good');
+  S.badge('db', 'COMMIT', 'good');
+  S.tag('a', 'booked', 'good');
+};
+window.S5c = async () => {
+  S.cap('Customer B\'s insert breaks the rule', 'Rolled back, then offered the next free slot');
+  const bad = ST.add(['Bay 2', 'Sat 9:00', 'B'], 'bad');
+  S.badge('db', 'ROLLBACK', 'bad');
+  await sleep(1300); bad.remove();
+  await S.send('db', 'api', { dur: 600, color: 'bad' });
+  await S.send('api', 'b', { dur: 700, color: 'warn', label: '9:30 is free' });
+  S.badge('b', 'offered 9:30', 'warn', 'bottom');
+};
+
+const B = Bars('load', {
+  head: 'Is one database enough?', max: 1000,
+  charts: [{ title: 'Writes per second', bars: [{ label: 'The shop at peak', value: 5, text: 'a few', color: 'acc' }, { label: 'One Postgres', value: 1000, text: 'thousands', color: 'good' }] }],
+});
+window.S5d = () => { B.show(); setTimeout(() => B.grow(0, 500), 400); };
+
+// ---- where it fits
+const Y = System('sys', { highlight: ['db'] });
+window.S6 = async () => {
+  Y.show(); await sleep(600);
+  for (let i = 0; i < 2; i++) { Y.flow(['browser', 'cdn', 'lb', 'api', 'db'], { dur: 450 }); await sleep(900); }
+  Y.cap('Behind the API', 'Every copy and every job uses the same database');
+  for (let i = 0; i < 3; i++) { Y.send('jobs', 'db', { dur: 700, color: 'warn' }); Y.send('api', 'db', { dur: 500 }); await sleep(900); }
+};
+
+// ---- trade-offs
+const T = Cards('trade', {
+  head: 'Two things to know', cols: 2, items: [
+    { icon: 'split', color: 'warn', title: 'Why not DynamoDB?', text: 'Built for huge-scale lookups by id. Changing two rows together is clunky.' },
+    { icon: 'search', title: 'Index frequent queries', text: 'A sorted lookup, so a query doesn\'t read every row.' },
+  ],
+});
+window.S7 = () => { T.show(); setTimeout(() => T.reveal(0), 300); };
+window.S7b = () => T.reveal(1);
+
+const Z = Say('say', 'Postgres, not DynamoDB: my write changes two rows together, and one database is plenty at these numbers.');
+window.S8 = () => Z.show();
+</script>
+</body>
+</html>
