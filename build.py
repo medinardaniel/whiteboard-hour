@@ -11,6 +11,7 @@ import html
 import re
 from pathlib import Path
 
+import cards
 import visuals
 
 ROOT = Path(__file__).parent
@@ -114,6 +115,31 @@ def heading(level, text, toc):
     return f'<h{level} id="{hid}">{inline(text)}</h{level}>'
 
 
+def core_card(c):
+    ic = visuals.icon_svg
+    steps = lambda xs: "<ol>" + "".join(f"<li>{inline(x)}</li>" for x in xs) + "</ol>"
+    tags = "".join(f'<span class="tag">{inline(u)}</span>' for u in c["use"])
+    terms = "".join(f'<div class="term"><b>{inline(t)}</b><span>{inline(d)}</span></div>' for t, d in c["also"])
+    code = f'<pre class="cc-code"><code>{html.escape(c["code"])}</code></pre>' if c["code"] else ""
+    bad, good = c["labels"]
+    svg = visuals.visual_for(c["title"])
+    if svg is None:
+        MISSING.append(c["title"])
+    return f"""<article class="cc" id="c{c['num']}">
+<div class="cc-head"><span class="num">{c['num']}</span><h3>{inline(c['title'])}</h3></div>
+<div class="vis">{svg or ''}</div>
+<p class="cc-plain">{inline(c['plain'])}</p>
+<div class="analogy">{ic('bulb', 18)}<span>{inline(c['analogy'])}</span></div>
+<div class="tags">{ic('target', 16)}{tags}</div>
+<div class="scene">{ic('doc', 18)}<span><b>Scenario.</b> {inline(c['setup'])}</span></div>
+<div class="vs"><div class="side bad"><div class="side-h">{ic('x', 15)}{bad}</div>{steps(c['without'])}</div>
+<div class="side good"><div class="side-h">{ic('check', 15)}{good}</div>{steps(c['with_'])}</div></div>
+{code}<div class="why"><b>Why it works:</b> {inline(c['why'])}</div>
+<div class="say">{ic('chat', 18)}<span>"{inline(c['say'])}"</span></div>
+<div class="terms">{terms}</div>
+</article>"""
+
+
 def timeline(lines):
     segs = []
     for l in lines:
@@ -137,6 +163,11 @@ def render(lines, toc, with_visuals=False):
         s = line.strip()
         if not s:
             flush(); i += 1; continue
+        m = re.match(r"\[\[cards:(\w+)\]\]$", s)
+        if m:
+            flush()
+            out.append('<div class="ccs">' + "".join(core_card(c) for c in cards.SECTIONS[m.group(1)]) + "</div>")
+            i += 1; continue
         if s.startswith(":::") and s != ":::":
             flush()
             kind, _, args = s[3:].strip().partition(" ")
@@ -294,6 +325,22 @@ details.answer > summary { display: none; }
 #part-index .chips li { padding: .1rem .5rem; font-size: 8.5pt; }
 .vis { padding: .1rem; margin: .2rem 0 .3rem; }
 .vis svg.v { max-height: 1.5in; width: auto; max-width: 100% !important; }
+#part-components { font-size: 14px; }
+#part-components .cc { break-before: page; }
+#part-components .ccs > .cc:first-child { break-before: auto; }
+#part-components h2 { break-before: page; }
+#part-components h2#skipped-for-now { break-before: auto; }
+#part-components h2 + p { break-after: avoid; }
+#part-components .ccs { display: block; }
+#part-components .cc-plain { font-size: 12pt; }
+#part-components .scene { font-size: 11pt; }
+#part-components .side ol, #part-components .why, #part-components .analogy, #part-components .say { font-size: 10.5pt; }
+#part-components .term { font-size: 9.5pt; }
+#part-components .cc { break-inside: avoid; line-height: 1.4; padding: .8rem 1rem; margin: 0; }
+#part-components .cc .vis svg.v { max-height: 2.4in; }
+#part-components .vs { grid-template-columns: 1fr 1fr; }
+#part-components .terms { grid-template-columns: repeat(3, 1fr); }
+#part-components .cc .scene { margin-top: .35rem; padding-top: .3rem; }
 #part-components .cards { grid-template-columns: 1fr; gap: .6rem; }
 #part-components .card { padding: .6rem .8rem; }
 #part-components .card-title { font-size: 12pt; }
