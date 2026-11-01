@@ -1,0 +1,242 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="color-scheme" content="light">
+<title>Hosted checkout + webhooks: lecture</title>
+<link rel="stylesheet" href="../lib/lecture.css">
+<script src="../lib/icons.js"></script>
+<script src="../lib/lecture.js"></script>
+</head>
+<body>
+<script>
+// ---- page helpers (dots that move, timers that stop with the scene)
+const NS = 'http://www.w3.org/2000/svg', COL = { acc: '#2456c7', good: '#1a7f37', bad: '#cf222e', warn: '#bf8700', muted: '#5f6368' };
+const mk = (parent, tag, attrs) => { const e = document.createElementNS(NS, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); parent.append(e); return e; };
+let timers = [];
+// loops stop on their own after `life` ms, so the screen settles (lighter on the recorder)
+const every = (ms, fn, life = 7000) => { const id = setInterval(fn, ms); timers.push(id); timers.push(setTimeout(() => clearInterval(id), life)); return id; };
+const later = (ms, fn) => { const id = setTimeout(fn, ms); timers.push(id); return id; };
+const stopAll = () => { timers.forEach(id => { clearInterval(id); clearTimeout(id); }); timers = []; };
+function dot(d, x, y, o = {}) {
+  const r = o.r || 26, g = mk(d.fx, 'g', {});
+  g.style.transition = `transform ${o.ms || 700}ms cubic-bezier(.4,0,.2,1), opacity .5s`;
+  const P = {
+    g, x, y,
+    to(x, y) { this.x = x; this.y = y; g.style.transform = `translate(${x}px,${y}px)`; return this; },
+    color(c) { this.c.setAttribute('fill', COL[c] || c); return this; },
+    set(t) { this.t.textContent = t; return this; },
+    note(t, c = 'warn') {
+      if (!this.n) this.n = mk(g, 'text', { y: -r - 14, 'text-anchor': 'middle', style: 'font-size:26px;font-weight:800' });
+      this.n.setAttribute('fill', COL[c] || c); this.n.textContent = t; return this;
+    },
+    fade() { g.style.opacity = 0; setTimeout(() => g.remove(), 600); },
+  };
+  P.to(x, y);
+  P.c = mk(g, 'circle', { r, fill: COL[o.color || 'acc'] || o.color });
+  P.t = mk(g, 'text', { y: 8, 'text-anchor': 'middle', fill: '#fff', style: `font-size:${o.fs || 22}px;font-weight:800` });
+  P.t.textContent = o.label == null ? '' : o.label;
+  return P;
+}
+// a soft rounded area drawn behind the nodes, with a title
+function area(d, x1, y1, x2, y2, title, o = {}) {
+  const g = mk(d.bg, 'g', {});
+  mk(g, 'rect', { x: x1, y: y1, width: x2 - x1, height: y2 - y1, rx: 30, fill: o.fill || '#eef0f4', stroke: o.stroke || 'none', 'stroke-width': 3, 'stroke-dasharray': o.dash ? '10 8' : '' });
+  if (title) { const t = mk(g, 'text', { x: o.tx || (x1 + x2) / 2, y: y1 + 40, 'text-anchor': 'middle', fill: o.tc || '#5f6368', style: 'font-size:26px;font-weight:700;letter-spacing:.04em' }); t.textContent = title; }
+  return g;
+}
+const fadeIn = (e, on = true) => { e.style.transition = 'opacity .5s'; e.style.opacity = on ? 1 : 0; };
+// The lib's send() steps with requestAnimationFrame, which can stall in headless recording when little else moves
+// (a chain of awaited sends then runs seconds late). Same animation, stepped with setTimeout and performance.now().
+Diagram.prototype.send = function (a, b, opts = {}) {
+  const p = this.N[a] || a, q = this.N[b] || b, dur = opts.dur || 900, r = opts.r || 11, c = COL[opts.color] || opts.color || COL.acc;
+  return new Promise(res => {
+    const g = mk(this.fx, 'g', {});
+    mk(g, 'circle', { r, fill: c });
+    if (opts.label) { const t = mk(g, 'text', { y: -r - 8, class: 'tag', fill: c, style: 'font-size:22px' }); t.textContent = opts.label; }
+    const mx = (p.x + q.x) / 2, my = (p.y + q.y) / 2 - (opts.curve || 0), t0 = performance.now();
+    const step = () => {
+      const k = Math.min(1, (performance.now() - t0) / dur), e = k < .5 ? 2 * k * k : 1 - Math.pow(-2 * k + 2, 2) / 2;
+      const x = (1 - e) ** 2 * p.x + 2 * (1 - e) * e * mx + e * e * q.x, y = (1 - e) ** 2 * p.y + 2 * (1 - e) * e * my + e * e * q.y;
+      g.setAttribute('transform', `translate(${x},${y})`);
+      if (k < 1) setTimeout(step, 16); else { g.remove(); res(); }
+    };
+    step();
+  });
+};
+
+Title({ num: 17, name: 'Hosted checkout + webhooks', sub: 'Pay on Stripe\'s page. Stripe tells you it worked.', phase: 'Call third parties safely', pills: ['Every payment', 'No card numbers on your servers'] });
+
+// ---- definition: pay there, hear back here
+const D = Define('def', {
+  html: 'A pattern for payments: customers <b>pay on the provider\'s own page</b>. The provider then <b>calls your server</b>, a <b>webhook</b>, to say the payment worked.',
+  extra: { label: 'With Stripe:', pills: ['Stripe Checkout', 'Webhook endpoint'] },
+});
+const dd = D.d;
+dd.node('b', 170, 540, 'browser', 'Customer', '', { w: 170 });
+dd.node('st', 720, 300, 'card', 'Stripe\'s page', '', { w: 210, hidden: true });
+dd.node('srv', 720, 800, 'server', 'Your server', '', { w: 200, hidden: true });
+dd.link('b', 'st'); dd.link('st', 'srv', { dash: true, id: 'wh' });
+window.SD = async () => {
+  D.show(); dd.popAll(['st', 'srv'], 400); await sleep(1600);
+  const cyc = async () => {
+    await dd.send('b', 'st', { dur: 1000, color: 'good', label: 'card' });
+    dd.badge('st', 'paid', 'good'); await sleep(1200);
+    dd.linkTone('wh', 'acc'); await dd.send('st', 'srv', { dur: 1000, color: 'warn', label: 'webhook: paid' });
+    dd.badge('srv', 'order paid', 'good', 'bottom'); await sleep(1000); dd.unbadge('st'); dd.unbadge('srv'); dd.linkTone('wh', '');
+  };
+  cyc(); every(5000, cyc, 9000);
+};
+window.SD2 = () => D.more();
+
+// ---- the problem: your own card form
+const P = Stage('prob', { caption: ['The problem', 'Your own card form'] });
+P.node('b', 260, 600, 'browser', 'Your card form', '', { w: 240 });
+P.node('api', 860, 600, 'server', 'Your server', '', { w: 220 });
+P.node('db', 1400, 450, 'db', 'Database', '', { w: 200 });
+P.node('log', 1400, 780, 'log', 'Logs', '', { w: 200 });
+P.link('b', 'api'); P.link('api', 'db'); P.link('api', 'log');
+window.S1 = async () => {
+  stopAll(); P.show(); await sleep(500);
+  every(3000, async () => {
+    await P.send('b', 'api', { dur: 900, color: 'bad', label: '4242 4242 ...' });
+    P.send('api', 'db', { dur: 800, color: 'bad', label: 'card' }); P.send('api', 'log', { dur: 800, color: 'bad', label: 'card' });
+  });
+  await sleep(1500); ['api', 'db', 'log'].forEach(k => P.tone(k, 'warn'));
+};
+window.S1b = () => {
+  P.cap('PCI: the card industry\'s security rules', 'Touch card numbers, and every server involved is audited');
+  P.group(['api', 'db', 'log'], 'PCI SCOPE: HEAVY AUDITS', 40);
+  ['api', 'db', 'log'].forEach(k => P.tone(k, 'bad'));
+};
+
+// ---- how it works: session, redirect, webhook
+const M = Stage('how', { caption: ['1. Create a checkout session', 'Your server asks Stripe for a payment page'] });
+M.node('b', 260, 620, 'browser', 'Customer', 'browser', { w: 200 });
+M.node('api', 960, 870, 'server', 'Your server', '', { w: 220 });
+M.node('st', 1580, 380, 'card', 'Stripe', 'checkout page', { w: 230 });
+M.link('b', 'api'); M.link('api', 'st'); M.link('b', 'st', { curve: 80, id: 'b-st' }); M.linkTone('b-st', 'dim');
+const whT = M.text(1460, 720, 'POST /webhooks/stripe', { color: 'warn', size: 28 }); fadeIn(whT, false);
+window.S2 = async () => {
+  stopAll(); M.show(); await sleep(500);
+  await M.send('b', 'api', { dur: 900, label: 'Pay' });
+  await M.send('api', 'st', { dur: 1100, label: 'session: order 42, $24' });
+  await sleep(300); await M.send('st', 'api', { dur: 1000, color: 'good', label: 'link' });
+};
+window.S2b = async () => {
+  M.cap('2. Redirect to Stripe\'s page', 'The card is typed there, not on your site');
+  await M.send('api', 'b', { dur: 900, label: 'redirect' });
+  M.linkTone('b-st', 'good');
+  await M.send('b', 'st', { dur: 1300, color: 'good', curve: 80, label: 'card' });
+  M.badge('api', 'never sees the card', 'good', 'bottom'); M.badge('st', 'paid', 'good');
+};
+window.S3 = async () => {
+  M.cap('3. The webhook', 'Stripe calls your server when something happens');
+  fadeIn(whT); M.linkTone('api-st', 'acc');
+  await M.send('st', 'api', { dur: 1300, color: 'warn', r: 14, label: 'order 42 paid' });
+  M.unbadge('api'); M.badge('api', 'order 42: paid', 'good', 'bottom'); M.tone('api', 'good');
+};
+window.S3b = async () => {
+  M.cap('Don\'t trust the redirect back', 'The customer may close the tab. The webhook comes anyway.');
+  M.tone('api', ''); M.unbadge('api');
+  const back = M.send('st', 'b', { dur: 1300, color: 'muted', curve: 80, label: 'back to your site' });
+  await sleep(700); M.tone('b', 'muted'); M.rename('b', 'Customer', 'tab closed'); M.tag('b', 'closed', 'muted', -100);
+  await back;
+  await M.send('st', 'api', { dur: 1200, color: 'warn', r: 14, label: 'webhook' });
+  M.badge('api', 'order 42: paid', 'good', 'bottom'); M.tone('api', 'good');
+};
+
+// ---- the webhook handler: four rules
+const W = Stage('hand', { caption: ['Your webhook handler', 'POST /webhooks/stripe'] });
+W.node('st', 190, 560, 'card', 'Stripe', 'event evt_1', { w: 200 });
+W.node('sig', 540, 560, 'lock', 'Check signature', 'proof it\'s Stripe', { w: 250 });
+W.node('evt', 880, 560, 'key', 'Save event id', 'evt_1', { w: 250 });
+W.node('paid', 1220, 560, 'check', 'Mark paid', 'order 42', { w: 250 });
+W.node('ok', 1590, 560, 'bolt', 'Reply 200 OK', 'fast', { w: 250 });
+W.node('q', 1220, 860, 'queue', 'Queue', 'text the customer later', { w: 290, hidden: true });
+W.link('st', 'sig'); W.link('sig', 'evt'); W.link('evt', 'paid'); W.link('paid', 'ok'); const pq = W.link('paid', 'q', { dash: true }); pq.style.opacity = 0;
+W.link('ok', 'st', { curve: -330, dash: true, id: 'ret' });
+window.S4 = async () => {
+  stopAll(); W.show(); await sleep(400);
+  await W.send('st', 'sig', { dur: 900, color: 'warn', r: 14 }); W.tone('sig', 'good'); W.tag('sig', 'valid', 'good', -100);
+  await sleep(1800);
+  await W.send('sig', 'evt', { dur: 800, color: 'warn', r: 14 }); W.tone('evt', 'good'); W.badge('evt', 'saved: evt_1', 'acc', 'bottom');
+};
+window.S4b = async () => {
+  await W.send('evt', 'paid', { dur: 700, color: 'warn', r: 14 }); W.tone('paid', 'good');
+  await W.send('paid', 'ok', { dur: 700, color: 'warn', r: 14 }); W.tone('ok', 'good');
+  W.send('ok', 'st', { dur: 1000, color: 'good', curve: -330, label: '200 OK' });
+  await sleep(1300); W.pop('q'); pq.style.opacity = 1; W.send('paid', 'q', { dur: 800, r: 10 });
+};
+
+// ---- what it's for
+const U = Cards('uses', {
+  head: 'What you use it for', cols: 2, items: [
+    { icon: 'card', title: 'Every payment', text: 'One-time orders and subscriptions.' },
+    { icon: 'callback', color: 'warn', title: 'Refunds and disputes', text: 'They arrive as webhooks too, to the same handler.' },
+  ],
+});
+window.S5 = () => { stopAll(); U.show(); later(300, () => U.reveal(0)); later(2400, () => U.reveal(1)); };
+
+// ---- scenario: order 42, a sequence of messages, with a duplicate
+const Q = Stage('seq', { head: 'Pizza shop: order 42, $24' });
+const LX = { b: 330, api: 960, st: 1590 };
+Q.node('b', LX.b, 240, 'browser', 'Customer', '', { w: 210 });
+Q.node('api', LX.api, 240, 'server', 'Your server', '', { w: 220 });
+Q.node('st', LX.st, 240, 'card', 'Stripe', '', { w: 210 });
+Object.values(LX).forEach(x => mk(Q.bg, 'line', { x1: x, y1: 310, x2: x, y2: 1030, stroke: '#b8bfcc', 'stroke-width': 3, 'stroke-dasharray': '8 8' }));
+async function msg(a, b, y, label, color = 'acc', dashed = false) {
+  const x1 = LX[a], x2 = LX[b], dir = Math.sign(x2 - x1);
+  const g = mk(Q.links, 'g', {}); g.style.opacity = 0; g.style.transition = 'opacity .4s';
+  mk(g, 'line', { x1, y1: y, x2: x2 - dir * 14, y2: y, stroke: COL[color], 'stroke-width': 4, 'stroke-dasharray': dashed ? '10 8' : '' });
+  mk(g, 'polygon', { points: `${x2},${y} ${x2 - dir * 20},${y - 10} ${x2 - dir * 20},${y + 10}`, fill: COL[color] });
+  const t = mk(g, 'text', { x: (x1 + x2) / 2, y: y - 14, 'text-anchor': 'middle', fill: COL[color], style: 'font-size:27px;font-weight:700' }); t.textContent = label;
+  setTimeout(() => g.style.opacity = 1, 30);
+  await Q.send({ x: x1, y }, { x: x2, y }, { dur: 800, color, r: 10 });
+}
+window.S6 = async () => {
+  stopAll(); Q.show(); await sleep(500);
+  await msg('b', 'api', 370, 'Pay for order 42');
+  await msg('api', 'st', 440, 'Create checkout session: $24');
+  await msg('api', 'b', 510, 'Redirect to Stripe');
+  await msg('b', 'st', 580, 'Card, typed on Stripe\'s page', 'good');
+};
+window.S6b = async () => {
+  await msg('st', 'api', 670, 'Webhook evt_1: order 42 paid', 'warn');
+  Q.badge('api', 'order 42: paid', 'good', 'top');
+  await msg('api', 'st', 740, '200 OK', 'good');
+};
+window.S6c = async () => {
+  await msg('st', 'api', 850, 'evt_1 again (a duplicate)', 'warn', true);
+  Q.tag('api', 'known id: ignored', 'warn', -90);
+  const n = Q.text(LX.api - 30, 900, 'evt_1 already saved: ignore', { color: 'muted', size: 26, anchor: 'end' }); fadeIn(n, false); setTimeout(() => fadeIn(n), 30);
+  await msg('api', 'st', 960, '200 OK', 'good');
+  const k = Q.text(1590, 1060, 'paid once, cooked once', { color: 'good', size: 30 });
+};
+
+// ---- where it fits
+const Y = System('sys', { highlight: ['api', 'pay'], labels: { pay: ['Stripe', 'hosted checkout'] } });
+window.S7 = async () => {
+  stopAll(); Y.show(); await sleep(500);
+  await Y.flow(['browser', 'cdn', 'lb', 'api'], { dur: 380 });
+  await Y.send('api', 'pay', { dur: 700, label: 'session' });
+  await Y.send('browser', 'pay', { dur: 1300, curve: 380, color: 'good', label: 'card' });
+  await Y.send('pay', 'api', { dur: 900, color: 'warn', label: 'webhook' });
+  Y.badge('api', 'paid', 'good', 'bottom');
+};
+
+// ---- trade-offs
+const T = Cards('trade', {
+  head: 'Two things to know', cols: 2, items: [
+    { icon: 'retry', color: 'warn', title: 'Webhooks repeat and arrive late', text: 'Ignore known ids. Never assume their order.' },
+    { icon: 'gauge', color: 'bad', title: 'Stripe has rate limits', text: 'About 100 requests a second by default. Ask for more before launch.' },
+  ],
+});
+window.S8 = () => { stopAll(); T.show(); later(300, () => T.reveal(0)); };
+window.S8b = () => T.reveal(1);
+
+const Z = Say('say', 'Card data never touches our servers, which shrinks our PCI scope.');
+window.S9 = () => Z.show();
+</script>
+</body>
+</html>

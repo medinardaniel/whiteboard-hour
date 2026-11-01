@@ -1,5 +1,5 @@
 // Shared building blocks for the 1920x1080 lecture videos. Read README.md first.
-// Every animation is timed with performance.now() (requestAnimationFrame timestamps lag in headless recording).
+// Every animation is timed with performance.now() and stepped with setTimeout: requestAnimationFrame stalls in headless recording on a busy machine.
 (() => {
   const NS = 'http://www.w3.org/2000/svg';
   const COLORS = { acc: '#2456c7', good: '#1a7f37', bad: '#cf222e', warn: '#bf8700', muted: '#5f6368' };
@@ -80,7 +80,7 @@
           const k = Math.min(1, (performance.now() - t0) / dur), e = k < .5 ? 2 * k * k : 1 - Math.pow(-2 * k + 2, 2) / 2;
           const x = (1 - e) ** 2 * p.x + 2 * (1 - e) * e * mx + e * e * q.x, y = (1 - e) ** 2 * p.y + 2 * (1 - e) * e * my + e * e * q.y;
           g.setAttribute('transform', `translate(${x},${y})`);
-          if (k < 1) requestAnimationFrame(step); else { g.remove(); res(); }
+          if (k < 1) setTimeout(step, 16); else { g.remove(); res(); }
         };
         step();
       });
@@ -269,7 +269,7 @@
       const fmt = p => p.fmt || (v => v.toLocaleString());
       const count = (b, p, ms) => new Promise(res => {
         const t0 = performance.now();
-        const step = () => { const k = Math.min(1, (performance.now() - t0) / ms); b.textContent = fmt(p)(Math.round(p.n * k)); if (k < 1) requestAnimationFrame(step); else res(); };
+        const step = () => { const k = Math.min(1, (performance.now() - t0) / ms); b.textContent = fmt(p)(Math.round(p.n * k)); if (k < 1) setTimeout(step, 16); else res(); };
         step();
         setTimeout(() => { b.textContent = fmt(p)(p.n); res(); }, ms + 60);
       });

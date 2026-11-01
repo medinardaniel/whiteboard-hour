@@ -1,0 +1,258 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="color-scheme" content="light">
+<title>Replicas and failover: lecture</title>
+<link rel="stylesheet" href="../lib/lecture.css">
+<script src="../lib/icons.js"></script>
+<script src="../lib/lecture.js"></script>
+</head>
+<body>
+<script>
+// ---- page helpers (dots that move, timers that stop with the scene)
+const NS = 'http://www.w3.org/2000/svg', COL = { acc: '#2456c7', good: '#1a7f37', bad: '#cf222e', warn: '#bf8700', muted: '#5f6368' };
+const mk = (parent, tag, attrs) => { const e = document.createElementNS(NS, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); parent.append(e); return e; };
+let timers = [];
+// loops stop on their own after `life` ms, so the screen settles (lighter on the recorder)
+const every = (ms, fn, life = 7000) => { const id = setInterval(fn, ms); timers.push(id); timers.push(setTimeout(() => clearInterval(id), life)); return id; };
+const later = (ms, fn) => { const id = setTimeout(fn, ms); timers.push(id); return id; };
+const stopAll = () => { timers.forEach(id => { clearInterval(id); clearTimeout(id); }); timers = []; };
+function dot(d, x, y, o = {}) {
+  const r = o.r || 26, g = mk(d.fx, 'g', {});
+  g.style.transition = `transform ${o.ms || 700}ms cubic-bezier(.4,0,.2,1), opacity .5s`;
+  const P = {
+    g, x, y,
+    to(x, y) { this.x = x; this.y = y; g.style.transform = `translate(${x}px,${y}px)`; return this; },
+    color(c) { this.c.setAttribute('fill', COL[c] || c); return this; },
+    set(t) { this.t.textContent = t; return this; },
+    note(t, c = 'warn') {
+      if (!this.n) this.n = mk(g, 'text', { y: -r - 14, 'text-anchor': 'middle', style: 'font-size:26px;font-weight:800' });
+      this.n.setAttribute('fill', COL[c] || c); this.n.textContent = t; return this;
+    },
+    fade() { g.style.opacity = 0; setTimeout(() => g.remove(), 600); },
+  };
+  P.to(x, y);
+  P.c = mk(g, 'circle', { r, fill: COL[o.color || 'acc'] || o.color });
+  P.t = mk(g, 'text', { y: 8, 'text-anchor': 'middle', fill: '#fff', style: `font-size:${o.fs || 22}px;font-weight:800` });
+  P.t.textContent = o.label == null ? '' : o.label;
+  return P;
+}
+// a soft rounded area drawn behind the nodes, with a title
+function area(d, x1, y1, x2, y2, title, o = {}) {
+  const g = mk(d.bg, 'g', {});
+  mk(g, 'rect', { x: x1, y: y1, width: x2 - x1, height: y2 - y1, rx: 30, fill: o.fill || '#eef0f4', stroke: o.stroke || 'none', 'stroke-width': 3, 'stroke-dasharray': o.dash ? '10 8' : '' });
+  if (title) { const t = mk(g, 'text', { x: o.tx || (x1 + x2) / 2, y: y1 + 40, 'text-anchor': 'middle', fill: o.tc || '#5f6368', style: 'font-size:26px;font-weight:700;letter-spacing:.04em' }); t.textContent = title; }
+  return g;
+}
+const fadeIn = (e, on = true) => { e.style.transition = 'opacity .5s'; e.style.opacity = on ? 1 : 0; };
+// The lib's send() steps with requestAnimationFrame, which can stall in headless recording when little else moves
+// (a chain of awaited sends then runs seconds late). Same animation, stepped with setTimeout and performance.now().
+Diagram.prototype.send = function (a, b, opts = {}) {
+  const p = this.N[a] || a, q = this.N[b] || b, dur = opts.dur || 900, r = opts.r || 11, c = COL[opts.color] || opts.color || COL.acc;
+  return new Promise(res => {
+    const g = mk(this.fx, 'g', {});
+    mk(g, 'circle', { r, fill: c });
+    if (opts.label) { const t = mk(g, 'text', { y: -r - 8, class: 'tag', fill: c, style: 'font-size:22px' }); t.textContent = opts.label; }
+    const mx = (p.x + q.x) / 2, my = (p.y + q.y) / 2 - (opts.curve || 0), t0 = performance.now();
+    const step = () => {
+      const k = Math.min(1, (performance.now() - t0) / dur), e = k < .5 ? 2 * k * k : 1 - Math.pow(-2 * k + 2, 2) / 2;
+      const x = (1 - e) ** 2 * p.x + 2 * (1 - e) * e * mx + e * e * q.x, y = (1 - e) ** 2 * p.y + 2 * (1 - e) * e * my + e * e * q.y;
+      g.setAttribute('transform', `translate(${x},${y})`);
+      if (k < 1) setTimeout(step, 16); else { g.remove(); res(); }
+    };
+    step();
+  });
+};
+
+Title({ num: 14, name: 'Replicas and failover', sub: 'Copies of the database, and a spare ready to take over', phase: 'Survive the spike', pills: ['More read capacity', 'Survive a database crash'] });
+
+// grow an SVG rect's width over ms (performance.now timing, like the lib)
+function grow(r, from, to, ms) {
+  const t0 = performance.now();
+  return new Promise(res => { const step = () => { const k = Math.min(1, (performance.now() - t0) / ms); r.setAttribute('width', from + (to - from) * k); if (k < 1) setTimeout(step, 16); else res(); }; step(); });
+}
+
+// ---- definition: one writer, read-only copies, a standby
+const D = Define('def', {
+  html: 'The <b>primary</b> database takes every write. <b>Replicas</b> are live, read-only copies, a fraction of a second behind. A <b>standby</b> takes over if the primary dies.',
+  extra: { label: 'Built into managed databases:', pills: ['Read replicas', 'Multi-AZ standby'] },
+});
+const dd = D.d;
+dd.node('app', 480, 200, 'server', 'Your app', '', { w: 170 });
+dd.node('p', 480, 500, 'db', 'Primary', 'all writes', { w: 200, hidden: true });
+dd.node('r1', 160, 820, 'db', 'Replica', 'reads', { w: 170, hidden: true });
+dd.node('r2', 400, 820, 'db', 'Replica', 'reads', { w: 170, hidden: true });
+dd.node('sb', 760, 820, 'db', 'Standby', 'waits', { w: 180, hidden: true, tone: 'muted' });
+dd.link('app', 'p'); dd.link('p', 'r1', { dash: true }); dd.link('p', 'r2', { dash: true }); dd.link('p', 'sb');
+window.SD = async () => {
+  D.show(); dd.popAll(['p', 'r1', 'r2', 'sb'], 350);
+  await sleep(1700);
+  every(1500, async () => {
+    await dd.send('app', 'p', { dur: 600, label: 'write' });
+    dd.send('p', 'sb', { dur: 500, r: 8 });
+    await sleep(250); dd.send('p', 'r1', { dur: 700, r: 8 }); dd.send('p', 'r2', { dur: 700, r: 8 });
+  });
+  await sleep(4200);
+  every(1500, () => { dd.send('app', 'r1', { dur: 800, color: 'good', curve: 140 }); later(700, () => dd.send('app', 'r2', { dur: 800, color: 'good', curve: 60 })); });
+  await sleep(3000); dd.badge('sb', 'ready to take over', 'warn', 'bottom');
+};
+window.SD2 = () => D.more();
+
+// ---- the problem: one database does everything
+const P = Stage('prob', { caption: ['The problem', 'One database does everything'] });
+P.node('co', 360, 400, 'card', 'Checkout', '', { w: 230 });
+P.node('rep', 360, 780, 'chart', 'Sales report', 'a year of orders', { w: 250 });
+P.node('db', 1300, 590, 'db', 'Postgres', 'the only copy', { w: 260 });
+P.link('co', 'db'); P.link('rep', 'db');
+const pclk = P.text(1300, 860, '', { size: 44, color: 'bad' });
+window.S1 = async () => {
+  stopAll(); P.show(); P.meter('db', .2);
+  every(550, () => P.send('co', 'db', { dur: 700, color: 'good' }));
+  await sleep(900);
+  every(280, () => { P.send('rep', 'db', { dur: 1400, color: 'warn', r: 20 }); P.bump('db', .05); });
+  later(1200, () => every(1100, () => P.tag('co', 'slow...', 'warn', -100)));
+};
+window.S1b = async () => {
+  stopAll(); P.tone('db', 'bad'); P.rename('db', 'Postgres', 'machine failed');
+  P.cap('2:00 AM: the machine fails', 'Down until a new one is built from a backup');
+  every(900, () => P.tag('co', 'site down', 'bad', -100));
+  let m = 0; every(110, () => { m += 5; pclk.textContent = `down for ${Math.floor(m / 60)}h ${String(m % 60).padStart(2, '0')}m`; if (m >= 180) m = 175; });
+};
+
+// ---- how it works: writes, replication lag, reads, failover
+const M = Stage('how', { caption: ['One writer: the primary', 'Every write goes to one database'] });
+M.node('app', 230, 560, 'server', 'API', 'your app', { w: 180 });
+M.node('p', 860, 400, 'db', 'Primary', 'all writes', { w: 220, hidden: true });
+M.node('r1', 1470, 330, 'db', 'Replica 1', 'read-only', { w: 210, hidden: true });
+M.node('r2', 1470, 650, 'db', 'Replica 2', 'read-only', { w: 210, hidden: true });
+M.node('sb', 860, 840, 'db', 'Standby', 'other data center', { w: 250, hidden: true, tone: 'muted' });
+M.link('app', 'p'); M.link('p', 'r1', { dash: true }); M.link('p', 'r2', { dash: true }); M.link('p', 'sb');
+const lagT = M.text(1210, 520, 'replication lag', { color: 'warn', size: 30 }); fadeIn(lagT, false);
+let stock = 5;
+async function writeOnce(to = 'p') {
+  await M.send('app', to, { dur: 650, label: 'write' });
+  stock--; M.badge(to, 'stock: ' + stock, 'acc');
+  if (to === 'p') M.send('p', 'sb', { dur: 400, r: 8 }).then(() => M.badge('sb', 'stock: ' + stock, 'muted', 'bottom'));
+  await sleep(150); const s = stock;
+  M.send(to, 'r1', { dur: 1100, r: 9 }).then(() => M.badge('r1', 'stock: ' + s, 'good'));
+  M.send(to, 'r2', { dur: 1100, r: 9 }).then(() => M.badge('r2', 'stock: ' + s, 'good'));
+}
+window.S2 = async () => {
+  stopAll(); M.show(); M.popAll(['p', 'r1', 'r2', 'sb'], 300);
+  ['p', 'r1', 'r2'].forEach(k => M.badge(k, 'stock: 5', k === 'p' ? 'acc' : 'good')); M.badge('sb', 'stock: 5', 'muted', 'bottom');
+  await sleep(1500); writeOnce();
+};
+window.S2b = async () => {
+  M.cap('Replicas replay the log', 'They trail by a fraction of a second');
+  fadeIn(lagT); await writeOnce(); await sleep(1800); writeOnce();
+};
+window.S3 = () => {
+  M.cap('Reads go to replicas', 'Add replicas, add read capacity');
+  every(700, () => { const t = Math.random() < .5 ? 'r1' : 'r2'; M.send('app', t, { dur: 900, color: 'good', curve: t === 'r1' ? 420 : 0, label: 'read' }); });
+};
+window.S4 = async () => {
+  stopAll(); fadeIn(lagT, false);
+  M.cap('The standby: kept fully in sync', 'In another data center of the same region');
+  M.tone('sb', ''); await sleep(2200);
+  M.tone('p', 'bad'); M.rename('p', 'Primary', 'machine failed'); M.unbadge('p');
+  M.linkTone('p-r1', 'dim'); M.linkTone('p-r2', 'dim'); M.linkTone('p-sb', 'dim');
+  every(1100, async () => { await M.send('app', 'p', { dur: 600, color: 'bad', label: 'write' }); M.tag('app', 'failed', 'bad', -100); });
+};
+window.S4b = async () => {
+  stopAll(); M.cap('Failover: the standby is promoted', 'Usually within 30 to 60 seconds');
+  await M.ring('sb', 1400, 'good');
+  M.rename('sb', 'New primary', 'promoted'); M.tone('sb', 'good'); M.dim(['p']); M.linkTone('app-p', 'dim');
+  M.link('app', 'sb', { tone: 'good', id: 'app-sb' }); M.link('sb', 'r1', { dash: true, id: 'sb-r1' }); M.link('sb', 'r2', { dash: true, id: 'sb-r2' });
+  M.tag('app', 'retry', 'warn', -100);
+  writeOnce('sb'); later(2200, () => writeOnce('sb'));
+};
+
+// ---- what it's for
+const U = Cards('uses', {
+  head: 'What you use them for', cols: 2, items: [
+    { icon: 'chart', title: 'More read capacity', text: 'Reports and dashboards read from replicas.' },
+    { icon: 'shield', color: 'good', title: 'Surviving a crash', text: 'The standby turns hours of downtime into about a minute.' },
+  ],
+});
+window.S5 = () => { stopAll(); U.show(); later(300, () => U.reveal(0)); };
+window.S5b = () => U.reveal(1);
+
+// ---- scenario, part 1: the bike shop's morning report
+const S = Stage('scen', { caption: ['Bike shop, every morning', 'A heavy sales report runs'] });
+S.node('co', 330, 380, 'card', 'Checkout', 'customers', { w: 230 });
+S.node('rep', 330, 780, 'chart', 'Sales report', 'a year of orders', { w: 250 });
+S.node('pri', 1050, 560, 'db', 'Primary', '', { w: 230 });
+S.node('rpl', 1620, 780, 'db', 'Replica', 'reports read here', { w: 250, hidden: true });
+S.link('co', 'pri'); S.link('rep', 'pri', { id: 'rep-pri' }); const priRpl = S.link('pri', 'rpl', { dash: true }); priRpl.style.opacity = 0;
+window.S6 = async () => {
+  stopAll(); S.show(); S.meter('pri', .25);
+  every(550, () => S.send('co', 'pri', { dur: 700, color: 'good' }));
+  every(300, () => { S.send('rep', 'pri', { dur: 1300, color: 'warn', r: 20 }); S.bump('pri', .05); });
+  later(1600, () => every(1100, () => S.tag('co', 'slow...', 'warn', -100)));
+};
+window.S6b = async () => {
+  stopAll(); S.pop('rpl'); priRpl.style.opacity = 1; S.linkTone('rep-pri', 'dim');
+  S.link('rep', 'rpl', { tone: 'good', curve: -120 });
+  S.cap('Point the report at a replica', 'Checkout has the primary to itself');
+  every(550, () => S.send('co', 'pri', { dur: 700, color: 'good' }));
+  every(300, () => S.send('rep', 'rpl', { dur: 1300, color: 'warn', r: 20, curve: -120 }));
+  every(900, () => S.send('pri', 'rpl', { dur: 700, r: 8 }));
+  for (let i = 0; i < 6; i++) { S.bump('pri', -.1); await sleep(250); }
+  S.meter('rpl', .7);
+};
+
+// ---- scenario, part 2: 2 AM, the machine fails
+const TL = Stage('night', { caption: ['2:00 AM: the primary\'s machine fails', ''] });
+const X0 = 330, X1 = 1760, rowsY = [460, 800];
+TL.text(X0, rowsY[0] - 100, 'Without a standby', { color: 'bad', size: 40, anchor: 'start' });
+TL.text(X0, rowsY[1] - 100, 'With a standby', { color: 'good', size: 40, anchor: 'start' });
+const bars = rowsY.map(y => {
+  mk(TL.bg, 'rect', { x: X0, y: y - 30, width: X1 - X0, height: 60, rx: 12, fill: '#eef0f4' });
+  ['2 AM', '3 AM', '4 AM', '5 AM', '6 AM'].forEach((t, i) => TL.text(X0 + i * (X1 - X0) / 4, y + 76, t, { color: 'muted', size: 26, weight: 600 }));
+  return { red: mk(TL.fx, 'rect', { x: X0, y: y - 30, width: 0, height: 60, rx: 12, fill: COL.bad }), y };
+});
+const okBar = mk(TL.fx, 'rect', { x: X0 + 16, y: rowsY[1] - 30, width: 0, height: 60, rx: 12, fill: COL.good });
+const tA = TL.text(X0 + 560, rowsY[0] + 11, '', { color: '#fff', size: 32 });
+const tB = TL.text(X0 + 30, rowsY[1] - 50, '', { color: 'bad', size: 30, anchor: 'start' });
+const tC = TL.text(X0 + 700, rowsY[1] + 11, '', { color: '#fff', size: 32 });
+window.S6c = async () => {
+  stopAll(); TL.show(); await sleep(500);
+  await grow(bars[0].red, 0, 1100, 2800); bars[0].red.setAttribute('fill', 'url(#fadeRed)');
+  tA.textContent = 'down for hours, rebuilding from a backup';
+};
+window.S6d = async () => {
+  await grow(bars[1].red, 0, 14, 400); tB.textContent = 'about one minute';
+  await grow(okBar, 0, X1 - X0 - 16, 2200); tC.textContent = 'standby promoted, writes retried';
+};
+// a red bar that fades out at its end: the outage has no fixed length
+(() => { const defs = mk(TL.svg, 'defs', {}); const g = mk(defs, 'linearGradient', { id: 'fadeRed' }); mk(g, 'stop', { offset: '75%', 'stop-color': COL.bad }); mk(g, 'stop', { offset: '100%', 'stop-color': COL.bad, 'stop-opacity': 0 }); })();
+
+// ---- where it fits
+const Y = System('sys', { only: ['browser', 'cdn', 'lb', 'api', 'cache', 'db', 'queue', 'worker'], highlight: ['db'], labels: { db: ['Primary', 'Postgres'] } });
+Y.node('rpl', 1600, 330, 'db', 'Replica', 'reports', { w: 180, tone: 'hl' });
+Y.node('sb', 1600, 560, 'db', 'Standby', 'other data center', { w: 220, tone: 'hl' });
+Y.link('db', 'rpl', { dash: true }); Y.link('db', 'sb');
+window.S7 = async () => {
+  stopAll(); Y.show(); await sleep(500);
+  await Y.flow(['browser', 'cdn', 'lb', 'api', 'db'], { dur: 420, label: 'order' });
+  Y.send('db', 'sb', { dur: 500, r: 8 }); Y.send('db', 'rpl', { dur: 800, r: 8, curve: 60 });
+  await sleep(900);
+  every(1800, () => Y.send('api', 'rpl', { dur: 1000, color: 'good', curve: 260, label: 'report' }));
+};
+
+// ---- trade-offs
+const T = Cards('trade', {
+  head: 'Two things to know', cols: 2, items: [
+    { icon: 'clock', color: 'warn', title: 'Replicas can be behind', text: 'Fine for a report. Wrong for "is this in stock?"' },
+    { icon: 'retry', color: 'bad', title: 'Failover is a blip, not zero', text: 'The app must retry. And the standby roughly doubles the bill.' },
+  ],
+});
+window.S8 = () => { stopAll(); T.show(); later(300, () => T.reveal(0)); };
+window.S8b = () => T.reveal(1);
+
+const Z = Say('say', 'Never read stock you\'re about to sell from a replica. It can be a moment behind.');
+window.S9 = () => Z.show();
+</script>
+</body>
+</html>

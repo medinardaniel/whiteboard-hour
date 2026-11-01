@@ -1,0 +1,243 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="color-scheme" content="light">
+<title>Connection pooler: lecture</title>
+<link rel="stylesheet" href="../lib/lecture.css">
+<script src="../lib/icons.js"></script>
+<script src="../lib/lecture.js"></script>
+</head>
+<body>
+<script>
+// ---- page helpers (dots that move, timers that stop with the scene)
+const NS = 'http://www.w3.org/2000/svg', COL = { acc: '#2456c7', good: '#1a7f37', bad: '#cf222e', warn: '#bf8700', muted: '#5f6368' };
+const mk = (parent, tag, attrs) => { const e = document.createElementNS(NS, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); parent.append(e); return e; };
+let timers = [];
+// loops stop on their own after `life` ms, so the screen settles (lighter on the recorder)
+const every = (ms, fn, life = 7000) => { const id = setInterval(fn, ms); timers.push(id); timers.push(setTimeout(() => clearInterval(id), life)); return id; };
+const later = (ms, fn) => { const id = setTimeout(fn, ms); timers.push(id); return id; };
+const stopAll = () => { timers.forEach(id => { clearInterval(id); clearTimeout(id); }); timers = []; };
+function dot(d, x, y, o = {}) {
+  const r = o.r || 26, g = mk(d.fx, 'g', {});
+  g.style.transition = `transform ${o.ms || 700}ms cubic-bezier(.4,0,.2,1), opacity .5s`;
+  const P = {
+    g, x, y,
+    to(x, y) { this.x = x; this.y = y; g.style.transform = `translate(${x}px,${y}px)`; return this; },
+    color(c) { this.c.setAttribute('fill', COL[c] || c); return this; },
+    set(t) { this.t.textContent = t; return this; },
+    note(t, c = 'warn') {
+      if (!this.n) this.n = mk(g, 'text', { y: -r - 14, 'text-anchor': 'middle', style: 'font-size:26px;font-weight:800' });
+      this.n.setAttribute('fill', COL[c] || c); this.n.textContent = t; return this;
+    },
+    fade() { g.style.opacity = 0; setTimeout(() => g.remove(), 600); },
+  };
+  P.to(x, y);
+  P.c = mk(g, 'circle', { r, fill: COL[o.color || 'acc'] || o.color });
+  P.t = mk(g, 'text', { y: 8, 'text-anchor': 'middle', fill: '#fff', style: `font-size:${o.fs || 22}px;font-weight:800` });
+  P.t.textContent = o.label == null ? '' : o.label;
+  return P;
+}
+// a soft rounded area drawn behind the nodes, with a title
+function area(d, x1, y1, x2, y2, title, o = {}) {
+  const g = mk(d.bg, 'g', {});
+  mk(g, 'rect', { x: x1, y: y1, width: x2 - x1, height: y2 - y1, rx: 30, fill: o.fill || '#eef0f4', stroke: o.stroke || 'none', 'stroke-width': 3, 'stroke-dasharray': o.dash ? '10 8' : '' });
+  if (title) { const t = mk(g, 'text', { x: o.tx || (x1 + x2) / 2, y: y1 + 40, 'text-anchor': 'middle', fill: o.tc || '#5f6368', style: 'font-size:26px;font-weight:700;letter-spacing:.04em' }); t.textContent = title; }
+  return g;
+}
+const fadeIn = (e, on = true) => { e.style.transition = 'opacity .5s'; e.style.opacity = on ? 1 : 0; };
+// The lib's send() steps with requestAnimationFrame, which can stall in headless recording when little else moves
+// (a chain of awaited sends then runs seconds late). Same animation, stepped with setTimeout and performance.now().
+Diagram.prototype.send = function (a, b, opts = {}) {
+  const p = this.N[a] || a, q = this.N[b] || b, dur = opts.dur || 900, r = opts.r || 11, c = COL[opts.color] || opts.color || COL.acc;
+  return new Promise(res => {
+    const g = mk(this.fx, 'g', {});
+    mk(g, 'circle', { r, fill: c });
+    if (opts.label) { const t = mk(g, 'text', { y: -r - 8, class: 'tag', fill: c, style: 'font-size:22px' }); t.textContent = opts.label; }
+    const mx = (p.x + q.x) / 2, my = (p.y + q.y) / 2 - (opts.curve || 0), t0 = performance.now();
+    const step = () => {
+      const k = Math.min(1, (performance.now() - t0) / dur), e = k < .5 ? 2 * k * k : 1 - Math.pow(-2 * k + 2, 2) / 2;
+      const x = (1 - e) ** 2 * p.x + 2 * (1 - e) * e * mx + e * e * q.x, y = (1 - e) ** 2 * p.y + 2 * (1 - e) * e * my + e * e * q.y;
+      g.setAttribute('transform', `translate(${x},${y})`);
+      if (k < 1) setTimeout(step, 16); else { g.remove(); res(); }
+    };
+    step();
+  });
+};
+
+Title({ num: 15, name: 'Connection pooler', sub: 'Many app connections, a few real ones', phase: 'Survive the spike', pills: ['As soon as you add copies', 'PgBouncer'] });
+
+// lanes: a few real connections between two points, each can be lent out (lit) and returned
+function lanes(d, x1, x2, ys) {
+  return ys.map(y => ({ y, busy: false, p: mk(d.links, 'path', { d: `M${x1},${y} L${x2},${y}`, class: 'link', style: 'stroke-width:6' }) }));
+}
+async function lend(d, L, from, pool, dbk, x1, x2, color = 'acc') {
+  await d.send(from, pool, { dur: 650, r: 10, color });
+  let lane = L.find(l => !l.busy);
+  while (!lane) { await sleep(60); lane = L.find(l => !l.busy); }
+  lane.busy = true;
+  lane.p.classList.add('acc'); lane.p.style.stroke = COL[color];
+  await d.send({ x: x1, y: lane.y }, { x: x2, y: lane.y }, { dur: 380, r: 10, color });
+  await d.send({ x: x2, y: lane.y }, { x: x1, y: lane.y }, { dur: 380, r: 8, color: 'good' });
+  lane.p.style.stroke = ''; lane.p.classList.remove('acc'); lane.busy = false;
+  d.send(pool, from, { dur: 550, r: 8, color: 'good' });
+  return true;
+}
+
+// ---- definition: many in, few out
+const D = Define('def', {
+  html: 'A <b>small server between your app and Postgres</b>. It keeps a <b>few real database connections</b> open, and <b>shares them</b> among all your server copies.',
+  extra: { label: 'Run one, or turn on a managed one:', pills: ['PgBouncer', 'Amazon RDS Proxy'] },
+});
+const dd = D.d;
+const dCopies = [0, 1, 2, 3, 4, 5].map(i => { const k = 'c' + i; dd.node(k, 110, 165 + i * 150, 'server', 'Copy ' + (i + 1), '', { w: 150 }); return k; });
+dd.node('pool', 470, 540, 'proxy', 'Pooler', '', { w: 180, hidden: true });
+dd.node('db', 830, 540, 'db', 'Postgres', '', { w: 180 });
+dCopies.forEach(k => dd.link(k, 'pool'));
+const dL = lanes(dd, 560, 740, [500, 540, 580]);
+dL.forEach(l => fadeIn(l.p, false));
+const dA = dd.text(300, 90, 'many connections', { color: 'muted', size: 26 }); fadeIn(dA, false);
+const dB = dd.text(650, 460, 'a few real ones', { color: 'acc', size: 26 }); fadeIn(dB, false);
+window.SD = async () => {
+  D.show(); dd.pop('pool'); await sleep(900);
+  fadeIn(dA); dL.forEach(l => fadeIn(l.p)); fadeIn(dB);
+  await sleep(600);
+  every(260, () => lend(dd, dL, dCopies[Math.floor(Math.random() * 6)], 'pool', 'db', 560, 740));
+};
+window.SD2 = () => D.more();
+
+// ---- the problem: every copy holds its own connections
+const P = Stage('prob', { caption: ['What\'s a connection?', 'An open line from your app to the database'] });
+const pK = [];
+for (let i = 0; i < 7; i++) { const k = 'p' + i; P.node(k, 330, 280 + i * 112, null, 'Copy ' + (i + 1), '', { w: 200, h: 92, hidden: i > 1 }); pK.push(k); }
+P.node('db', 1350, 610, 'db', 'Postgres', 'one process per connection', { w: 330 });
+const pLinks = pK.map(k => { const l = P.link(k, 'db'); l.style.opacity = 0; return l; });
+const pCount = P.text(1350, 790, '', { size: 40, color: 'acc' });
+const pLim = P.text(1350, 450, 'limit: 100', { size: 34, color: 'bad' }); fadeIn(pLim, false);
+let conns = 0;
+const pTw = pK.map((k, i) => { const t = P.text(480, 280 + i * 112 + 2, '20', { size: 26, color: 'acc' }); fadeIn(t, false); return t; });
+const showCopy = i => { P.pop(pK[i]); pLinks[i].style.opacity = 1; fadeIn(pTw[i]); };
+const addConns = n => { conns += n; pCount.textContent = `connections: ${conns}`; P.meter('db', conns / 100); };
+window.S1 = async () => {
+  stopAll(); P.show(); showCopy(0); showCopy(1); addConns(40);
+  every(500, () => P.send(pK[Math.floor(Math.random() * 2)], 'db', { dur: 900, r: 8 }));
+  await sleep(4500); fadeIn(pLim);
+};
+window.S1b = async () => {
+  P.cap('Each copy holds its own set', 'Say 20 each, kept open');
+  for (let i = 2; i < 5; i++) { await sleep(800); showCopy(i); addConns(20); }
+  pCount.setAttribute('fill', COL.bad);
+};
+window.S1c = async () => {
+  P.cap('Past the limit, refused', 'Postgres: too many connections');
+  for (let i = 5; i < 7; i++) {
+    P.pop(pK[i]); pLinks[i].style.opacity = 1; pLinks[i].classList.add('bad'); P.tone(pK[i], 'bad');
+    await P.send(pK[i], 'db', { dur: 700, color: 'bad' }); P.tag(pK[i], 'refused', 'bad', -70); await sleep(500);
+  }
+  every(1200, () => { P.tag('p5', 'request failed', 'bad', -70); });
+};
+
+// ---- how it works
+const M = Stage('how', { caption: ['Every copy connects to the pooler', 'Those connections are cheap'] });
+const mK = [0, 1, 2, 3, 4, 5].map(i => { const k = 'm' + i; M.node(k, 260, 300 + i * 128, null, 'Copy ' + (i + 1), '', { w: 190, h: 92 }); return k; });
+M.node('pool', 900, 620, 'proxy', 'Pooler', '', { w: 230, hidden: true });
+M.node('db', 1610, 620, 'db', 'Postgres', '', { w: 240 });
+const mLinks = mK.map(k => { const l = M.link(k, 'pool'); l.style.opacity = 0; return l; });
+const mL = lanes(M, 1015, 1490, [540, 580, 620, 660, 700]);
+mL.forEach(l => fadeIn(l.p, false));
+const mT = M.text(1250, 500, 'a few real connections', { color: 'acc', size: 30 }); fadeIn(mT, false);
+const mBusy = M.text(1250, 790, '', { color: 'muted', size: 30 });
+window.S2 = async () => {
+  stopAll(); M.show(); M.pop('pool');
+  for (let i = 0; i < 6; i++) { await sleep(250); mLinks[i].style.transition = 'opacity .4s'; mLinks[i].style.opacity = 1; M.send(mK[i], 'pool', { dur: 500, r: 8 }); }
+};
+window.S3 = () => { M.cap('Behind it: a few real connections', 'Open all the time, to Postgres'); mL.forEach(l => fadeIn(l.p)); fadeIn(mT); };
+window.S3b = () => {
+  M.cap('Lent for one transaction', 'Milliseconds, then back in the pool');
+  every(320, () => lend(M, mL, mK[Math.floor(Math.random() * 6)], 'pool', 'db', 1015, 1490));
+  every(100, () => { const b = mL.filter(l => l.busy).length; mBusy.textContent = `in use right now: ${b} of 5`; });
+};
+const MC = Counters('math', {
+  head: 'Why a few are enough', parts: [
+    { n: 200, label: 'queries a second, each' }, { op: '×' }, { n: 50, label: 'real connections' }, { op: '=' },
+    { n: 10000, cls: 'good', label: 'queries a second' },
+  ],
+});
+window.S3c = async () => { stopAll(); MC.show(); MC.note('If a query takes 5 ms, one connection runs 200 a second'); MC.run(450, 150); };
+
+// ---- what it's for
+const U = Cards('uses', {
+  head: 'When you need one', cols: 2, items: [
+    { icon: 'scaleup', title: 'As soon as you add copies', text: 'More API copies, same few real connections.' },
+    { icon: 'gear', title: 'Many short-lived workers', text: 'Workers and functions each want their own connection.' },
+  ],
+});
+window.S5 = () => { stopAll(); U.show(); later(300, () => U.reveal(0)); };
+window.S5b = () => U.reveal(1);
+
+// ---- scenario: the pizza shop scales to 20 copies
+const SC = Counters('scount', {
+  head: 'Pizza shop, before the game', parts: [
+    { n: 20, label: 'API copies' }, { op: '×' }, { n: 20, label: 'connections each' }, { op: '=' },
+    { n: 400, cls: 'res', label: 'connections' },
+  ],
+});
+window.S6 = async () => { stopAll(); SC.show(); await sleep(300); SC.run(450, 150); };
+const S = Stage('scen', { caption: ['Database limit: 200', 'Copies 11 to 20 can\'t connect'] });
+const sK = [];
+for (let i = 0; i < 20; i++) { const k = 's' + i, c = i % 4, r = Math.floor(i / 4); S.node(k, 180 + c * 150, 330 + r * 145, null, '#' + (i + 1), '', { w: 120, h: 96 }); sK.push(k); }
+S.node('pool', 1080, 620, 'proxy', 'Pooler', '', { w: 220, hidden: true });
+S.node('db', 1640, 620, 'db', 'Postgres', 'limit: 200', { w: 240 });
+const sLinks = sK.map((k, i) => S.link(k, 'db', { id: 'd' + i }));
+const sPool = sK.map((k, i) => { const l = S.link(k, 'pool', { id: 'q' + i }); l.style.opacity = 0; return l; });
+const sL = lanes(S, 1190, 1520, [560, 590, 620, 650, 680]); sL.forEach(l => fadeIn(l.p, false));
+const sCount = S.text(1640, 810, '', { size: 38, color: 'bad' });
+const sT = S.text(1355, 520, '50 real connections', { size: 30, color: 'acc' }); fadeIn(sT, false);
+window.S6b = async () => {
+  stopAll(); S.show(); S.meter('db', 1); sCount.textContent = 'connections: 200 / 200';
+  sK.forEach((k, i) => { if (i < 10) S.tone(k, 'good'); else { S.tone(k, 'bad'); sLinks[i].classList.add('bad'); } });
+  every(300, () => S.send(sK[Math.floor(Math.random() * 10)], 'db', { dur: 800, r: 7, color: 'good' }));
+  await sleep(1400);
+  every(1000, () => { const i = 10 + Math.floor(Math.random() * 10); S.tag(sK[i], 'fail', 'bad', -60); });
+};
+window.S6c = async () => {
+  stopAll(); S.cap('With a pooler', 'All 20 copies in, 50 real connections out');
+  sLinks.forEach(l => { l.style.transition = 'opacity .5s'; l.style.opacity = 0; });
+  S.pop('pool'); await sleep(500);
+  sK.forEach((k, i) => { S.tone(k, 'good'); sPool[i].style.transition = 'opacity .5s'; sPool[i].style.opacity = 1; });
+  sL.forEach(l => fadeIn(l.p)); fadeIn(sT);
+  S.meter('db', .25); sCount.setAttribute('fill', COL.good); sCount.textContent = 'connections: 50 / 200';
+  every(250, () => lend(S, sL, sK[Math.floor(Math.random() * 20)], 'pool', 'db', 1190, 1520));
+};
+
+// ---- where it fits
+const Y = Stage('sys', { caption: ['Where it fits', 'Between your API copies and Postgres'] });
+Y.node('browser', 160, 600, 'browser', 'Browser', '', { w: 180 });
+Y.node('cdn', 440, 600, 'globe', 'CDN', '', { w: 170 });
+Y.node('lb', 720, 600, 'split', 'Load balancer', '', { w: 200 });
+['a1', 'a2', 'a3'].forEach((k, i) => Y.node(k, 1010, 380 + i * 220, 'server', 'API', 'copy ' + (i + 1), { w: 170 }));
+Y.node('pool', 1330, 600, 'proxy', 'Pooler', '', { w: 190, tone: 'hl' });
+Y.node('db', 1650, 600, 'db', 'Postgres', '', { w: 200 });
+Y.dim(['browser', 'cdn', 'lb']);
+Y.link('browser', 'cdn'); Y.link('cdn', 'lb'); ['a1', 'a2', 'a3'].forEach(k => { Y.link('lb', k); Y.link(k, 'pool'); });
+const yL = lanes(Y, 1425, 1550, [570, 600, 630]);
+window.S7 = async () => {
+  stopAll(); Y.show(); await sleep(400);
+  every(900, async () => { const a = ['a1', 'a2', 'a3'][Math.floor(Math.random() * 3)]; await Y.flow(['browser', 'cdn', 'lb', a], { dur: 380 }); lend(Y, yL, a, 'pool', 'db', 1425, 1550); });
+};
+
+// ---- trade-offs
+const T = Cards('trade', {
+  head: 'Two things to know', cols: 2, items: [
+    { icon: 'timer', color: 'warn', title: 'Keep transactions short', text: 'Never wait on Stripe while holding a connection, or the pool runs dry.' },
+    { icon: 'split', color: 'bad', title: 'No session tricks', text: 'Each transaction may get a different real connection.' },
+  ],
+});
+window.S8 = () => { stopAll(); T.show(); later(300, () => T.reveal(0)); };
+window.S8b = () => T.reveal(1);
+
+const Z = Say('say', 'Postgres allows a few hundred connections. Without a pooler, scaling the API takes down the database.');
+window.S9 = () => Z.show();
+</script>
+</body>
+</html>

@@ -1,0 +1,247 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="color-scheme" content="light">
+<title>Waiting room: lecture</title>
+<link rel="stylesheet" href="../lib/lecture.css">
+<script src="../lib/icons.js"></script>
+<script src="../lib/lecture.js"></script>
+</head>
+<body>
+<script>
+// ---- page helpers (dots that move, timers that stop with the scene)
+const NS = 'http://www.w3.org/2000/svg', COL = { acc: '#2456c7', good: '#1a7f37', bad: '#cf222e', warn: '#bf8700', muted: '#5f6368' };
+const mk = (parent, tag, attrs) => { const e = document.createElementNS(NS, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); parent.append(e); return e; };
+let timers = [];
+// loops stop on their own after `life` ms, so the screen settles (lighter on the recorder)
+const every = (ms, fn, life = 7000) => { const id = setInterval(fn, ms); timers.push(id); timers.push(setTimeout(() => clearInterval(id), life)); return id; };
+const later = (ms, fn) => { const id = setTimeout(fn, ms); timers.push(id); return id; };
+const stopAll = () => { timers.forEach(id => { clearInterval(id); clearTimeout(id); }); timers = []; };
+function dot(d, x, y, o = {}) {
+  const r = o.r || 26, g = mk(d.fx, 'g', {});
+  g.style.transition = `transform ${o.ms || 700}ms cubic-bezier(.4,0,.2,1), opacity .5s`;
+  const P = {
+    g, x, y,
+    to(x, y) { this.x = x; this.y = y; g.style.transform = `translate(${x}px,${y}px)`; return this; },
+    color(c) { this.c.setAttribute('fill', COL[c] || c); return this; },
+    set(t) { this.t.textContent = t; return this; },
+    note(t, c = 'warn') {
+      if (!this.n) this.n = mk(g, 'text', { y: -r - 14, 'text-anchor': 'middle', style: 'font-size:26px;font-weight:800' });
+      this.n.setAttribute('fill', COL[c] || c); this.n.textContent = t; return this;
+    },
+    fade() { g.style.opacity = 0; setTimeout(() => g.remove(), 600); },
+  };
+  P.to(x, y);
+  P.c = mk(g, 'circle', { r, fill: COL[o.color || 'acc'] || o.color });
+  P.t = mk(g, 'text', { y: 8, 'text-anchor': 'middle', fill: '#fff', style: `font-size:${o.fs || 22}px;font-weight:800` });
+  P.t.textContent = o.label == null ? '' : o.label;
+  return P;
+}
+// a soft rounded area drawn behind the nodes, with a title
+function area(d, x1, y1, x2, y2, title, o = {}) {
+  const g = mk(d.bg, 'g', {});
+  mk(g, 'rect', { x: x1, y: y1, width: x2 - x1, height: y2 - y1, rx: 30, fill: o.fill || '#eef0f4', stroke: o.stroke || 'none', 'stroke-width': 3, 'stroke-dasharray': o.dash ? '10 8' : '' });
+  if (title) { const t = mk(g, 'text', { x: o.tx || (x1 + x2) / 2, y: y1 + 40, 'text-anchor': 'middle', fill: o.tc || '#5f6368', style: 'font-size:26px;font-weight:700;letter-spacing:.04em' }); t.textContent = title; }
+  return g;
+}
+const fadeIn = (e, on = true) => { e.style.transition = 'opacity .5s'; e.style.opacity = on ? 1 : 0; };
+// The lib's send() steps with requestAnimationFrame, which can stall in headless recording when little else moves
+// (a chain of awaited sends then runs seconds late). Same animation, stepped with setTimeout and performance.now().
+Diagram.prototype.send = function (a, b, opts = {}) {
+  const p = this.N[a] || a, q = this.N[b] || b, dur = opts.dur || 900, r = opts.r || 11, c = COL[opts.color] || opts.color || COL.acc;
+  return new Promise(res => {
+    const g = mk(this.fx, 'g', {});
+    mk(g, 'circle', { r, fill: c });
+    if (opts.label) { const t = mk(g, 'text', { y: -r - 8, class: 'tag', fill: c, style: 'font-size:22px' }); t.textContent = opts.label; }
+    const mx = (p.x + q.x) / 2, my = (p.y + q.y) / 2 - (opts.curve || 0), t0 = performance.now();
+    const step = () => {
+      const k = Math.min(1, (performance.now() - t0) / dur), e = k < .5 ? 2 * k * k : 1 - Math.pow(-2 * k + 2, 2) / 2;
+      const x = (1 - e) ** 2 * p.x + 2 * (1 - e) * e * mx + e * e * q.x, y = (1 - e) ** 2 * p.y + 2 * (1 - e) * e * my + e * e * q.y;
+      g.setAttribute('transform', `translate(${x},${y})`);
+      if (k < 1) setTimeout(step, 16); else { g.remove(); res(); }
+    };
+    step();
+  });
+};
+
+Title({ num: 13, name: 'Waiting room', sub: 'A line page that lets people in at a fixed rate', phase: 'Survive the spike', pills: ['Demand far above capacity', 'Behind a flag'] });
+
+// ---- definition: everyone arrives at once, the site sees a steady flow
+const D = Define('def', {
+  html: 'A <b>holding page in front of your site</b>. When demand is too high, visitors <b>wait there in line</b>, and are let into the real site at a <b>fixed rate</b>.',
+  extra: { label: 'Switched on at your CDN, or bought:', pills: ['Cloudflare Waiting Room', 'Queue-it'] },
+});
+const dd = D.d;
+dd.node('u', 120, 540, 'users', 'Visitors', '', { w: 150 });
+dd.node('w', 460, 540, 'hourglass', 'Waiting room', '', { w: 210, hidden: true });
+dd.node('s', 820, 540, 'server', 'Your site', '', { w: 170, hidden: true });
+dd.link('u', 'w'); dd.link('w', 's');
+dd.queue('q', 460, 760, 6, 'In line');
+const dIn = dd.text(290, 440, 'all at once', { color: 'bad', size: 28 }); fadeIn(dIn, false);
+const dOut = dd.text(640, 440, 'a fixed rate', { color: 'good', size: 28 }); fadeIn(dOut, false);
+window.SD = async () => {
+  D.show(); dd.popAll(['w', 's'], 350);
+  await sleep(900);
+  fadeIn(dIn); let n = 0;
+  every(160, () => { dd.send('u', 'w', { dur: 600, r: 9 }); n++; dd.fill('q', Math.min(5, 1 + Math.floor(n / 3))); });
+  await sleep(1400);
+  fadeIn(dOut); dd.meter('s', .3);
+  every(900, () => dd.send('w', 's', { dur: 600, color: 'good' }));
+};
+window.SD2 = () => D.more();
+
+// ---- the problem: everyone at the same second
+const P = Stage('prob', { caption: ['The problem', 'A sale that starts at an exact minute'] });
+P.node('ppl', 380, 580, 'users', 'People refreshing', 'thousands of them', { w: 270 });
+P.node('site', 1420, 580, 'server', 'Your site', 'built for a steady flow', { w: 290 });
+P.link('ppl', 'site');
+const clk = P.text(900, 380, '5:59:55', { size: 90, color: 'muted' });
+window.S1 = () => {
+  stopAll(); P.show(); P.meter('site', .15);
+  let s = 55;
+  every(1000, () => { if (s < 59) clk.textContent = '5:59:' + (++s); });
+  every(800, () => P.tag('ppl', 'refresh', 'acc', -100));
+};
+window.S1b = async () => {
+  stopAll(); clk.textContent = '6:00:00'; clk.setAttribute('fill', COL.bad);
+  P.cap('6:00:00: everyone at once', 'Thousands of requests in the same second');
+  every(60, () => { P.send('ppl', 'site', { dur: 700, r: 9 }); P.bump('site', .04); });
+  await sleep(1500);
+  stopAll(); P.tone('site', 'bad'); P.rename('site', 'Your site', 'crashed');
+  every(900, () => P.tag('ppl', '503 error', 'bad', -100));
+};
+
+// ---- and it isn't fair: a race
+const R = Stage('race', { caption: ['And it isn\'t fair', 'The fastest connection, or a bot, gets in first'] });
+R.node('bot', 330, 380, 'gear', 'A bot', 'a script', { w: 240 });
+R.node('fast', 330, 620, 'globe', 'Fast Wi-Fi', '', { w: 240 });
+R.node('slow', 330, 860, 'phone', 'Phone on a train', '', { w: 260 });
+R.node('co', 1450, 620, 'card', 'Checkout', 'a few items left', { w: 260 });
+['bot', 'fast', 'slow'].forEach(k => R.link(k, 'co'));
+window.S1c = async () => {
+  stopAll(); R.show(); await sleep(400);
+  R.send('bot', 'co', { dur: 600, color: 'bad' }).then(() => R.badge('bot', 'in first', 'bad', 'bottom'));
+  R.send('fast', 'co', { dur: 1300 }).then(() => R.badge('fast', 'in second', 'acc', 'bottom'));
+  await R.send('slow', 'co', { dur: 2600, color: 'muted' });
+  R.badge('slow', 'sold out', 'muted', 'bottom'); R.tone('slow', 'muted');
+};
+
+// ---- how it works: the line, the shuffle, the fixed rate, the pass
+const H = Stage('how', { caption: ['Everyone lands on the line page', 'Each visitor gets a place in line'] });
+H.node('vis', 170, 580, 'users', 'Visitors', '', { w: 190 });
+area(H, 350, 420, 1370, 720, 'WAITING ROOM: THE LINE PAGE', { tx: 640 });
+H.node('gate', 1530, 580, 'gate', 'Let in', 'fixed rate', { w: 170 });
+H.node('site', 1770, 580, 'server', 'Your site', '', { w: 170 });
+H.link('vis', 'gate', { dash: true }); H.link('gate', 'site');
+const hclk = H.text(1180, 400, '5:58 AM', { size: 40, color: 'muted' });
+const slotX = i => 1280 - i * 110, LY = 600;
+let line = [], nextN = 9, mine = null;
+window.S2 = () => {
+  stopAll(); H.show();
+  for (let i = 0; i < 8; i++) later(300 + i * 420, () => H.send('vis', { x: slotX(i), y: LY }, { dur: 600 }).then(() => { line[i] = dot(H, slotX(i), LY, { label: i + 1 }); }));
+};
+window.S3 = () => {
+  H.cap('Fair start: shuffle the early birds', 'Being fastest at 5:59 doesn\'t put you first');
+  hclk.textContent = '6:00 AM'; hclk.setAttribute('fill', COL.acc);
+  const perm = [5, 2, 7, 0, 6, 3, 1, 4];
+  line = perm.map(j => line[j]);
+  line.forEach((p, i) => later(i * 90, () => p.to(slotX(i), LY - 90 + (i % 2) * 180)));
+  later(1300, () => line.forEach((p, i) => p.to(slotX(i), LY)));
+};
+function release() {
+  const f = line.shift(); if (!f) return;
+  f.to(1530, 580); later(650, () => { f.fade(); H.send('gate', 'site', { color: 'good', dur: 450 }); if (f === mine) H.tag('site', 'you\'re in', 'warn', -100); });
+  line.forEach((p, i) => p.to(slotX(i), LY));
+  if (mine && line.includes(mine)) mine.note('your place: ' + (line.indexOf(mine) + 1));
+  const at = slotX(line.length);
+  H.send('vis', { x: at, y: LY }, { dur: 600, color: 'muted' }).then(() => line.push(dot(H, at, LY, { label: nextN++, color: 'muted' })));
+}
+window.S4 = () => {
+  H.cap('Let in at a fixed rate', 'The rate your site was load tested for');
+  H.badge('gate', 'tested rate', 'good', 'top'); H.meter('site', .3);
+  mine = line[5]; mine.color('warn').note('your place: 6');
+  later(900, release); every(1150, release);
+};
+window.S4b = () => {
+  H.cap('A pass, in a cookie', 'Visitors let in don\'t queue again');
+  every(1500, () => H.send('vis', 'site', { curve: 440, color: 'good', dur: 1300, label: 'has a pass' }));
+};
+
+// ---- what it's for
+const U = Cards('uses', {
+  head: 'When you use one', cols: 2, items: [
+    { icon: 'users', color: 'bad', title: 'Demand far above capacity', text: 'More people than you can serve, even after adding servers.' },
+    { icon: 'clock', title: 'A sale at an exact minute', text: 'Everyone arrives in the same second.' },
+  ],
+});
+window.S5 = () => { stopAll(); U.show(); later(300, () => U.reveal(0)); };
+window.S5b = () => U.reveal(1);
+
+// ---- scenario: electronics sale at 6:00 AM
+const S = Stage('scen', { caption: ['', ''] });
+S.text(480, 190, 'Without a waiting room', { color: 'bad', size: 46 });
+S.text(1440, 190, 'With one', { color: 'good', size: 46 });
+S.node('cl', 220, 560, 'users', '40,000 people', '', { w: 210 });
+S.node('sl', 720, 560, 'card', 'Checkout', 'tested for 300/s', { w: 230 });
+S.node('cr', 1090, 560, 'users', '40,000 people', '', { w: 210 });
+S.node('w', 1420, 560, 'hourglass', 'Waiting room', '', { w: 210 });
+S.node('sr', 1755, 560, 'card', 'Checkout', 'tested for 300/s', { w: 230 });
+S.link('cl', 'sl'); S.link('cr', 'w'); S.link('w', 'sr');
+S.text(960, 990, 'Electronics sale, 6:00 AM: 40,000 people, checkout tested for 300 a second', { color: 'muted', size: 34, weight: 600 });
+const sclk = S.text(960, 300, '5:59:58', { size: 54, color: 'muted' });
+const inLine = S.text(1420, 760, '', { size: 36, color: 'acc' });
+const letIn = S.text(1590, 470, '', { size: 30, color: 'good' });
+window.S6 = () => {
+  stopAll(); S.show(); S.meter('sl', .15); S.meter('sr', .15);
+  every(900, () => { S.tag('cl', 'refresh', 'acc', -100); S.tag('cr', 'refresh', 'acc', -100); });
+};
+window.S6b = async () => {
+  stopAll(); sclk.textContent = '6:00:00'; sclk.setAttribute('fill', COL.bad);
+  every(70, () => { S.send('cl', 'sl', { dur: 650, r: 8 }); S.bump('sl', .04); });
+  await sleep(1500);
+  stopAll(); S.tone('sl', 'bad'); S.rename('sl', 'Checkout', 'fell over');
+  every(1000, () => S.tag('cl', 'error', 'bad', -100));
+};
+window.S6c = async () => {
+  for (let i = 0; i < 16; i++) later(i * 45, () => S.send('cr', 'w', { dur: 600, r: 8 }));
+  inLine.textContent = 'in line: 40,000';
+  await sleep(700);
+  letIn.textContent = '300 a second'; S.meter('sr', .35);
+  every(380, () => S.send('w', 'sr', { dur: 500, color: 'good' }));
+  const t0 = performance.now(), span = 7000, total = 40000, secs = 133;
+  every(100, () => {
+    const k = Math.min(1, (performance.now() - t0) / span), left = Math.round(total * (1 - k) / 300) * 300;
+    inLine.textContent = 'in line: ' + Math.max(0, left).toLocaleString();
+    const s = Math.round(secs * k);
+    sclk.textContent = `6:0${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; sclk.setAttribute('fill', COL.good);
+    if (k >= 1) { inLine.textContent = 'last one in at 6:02'; }
+  }, 7600);
+};
+
+// ---- where it fits
+const Y = System('sys', { highlight: ['cdn'], labels: { cdn: ['CDN', '+ waiting room'] } });
+window.S7 = async () => {
+  stopAll(); Y.show(); await sleep(500);
+  await Y.send('browser', 'cdn', { dur: 600 });
+  Y.badge('cdn', 'in line', 'warn'); await sleep(1300);
+  Y.badge('cdn', 'let in', 'good'); await Y.flow(['cdn', 'lb', 'api'], { dur: 500, color: 'good' });
+  every(1700, () => Y.flow(['browser', 'cdn', 'lb', 'api'], { dur: 450, color: 'good', label: 'pass' }));
+};
+window.S7b = () => { Y.badge('cdn', 'flag: off', 'muted'); Y.cap('Off on a normal day', 'Behind a feature flag: flipped without a deploy'); };
+
+// ---- trade-offs
+const T = Cards('trade', {
+  head: 'Two trade-offs', cols: 2, items: [
+    { icon: 'hourglass', color: 'warn', title: 'Waiting is a real cost', text: 'Only turn it on when traffic beats the plan.' },
+    { icon: 'gauge', color: 'bad', title: 'The rate comes from your load test', text: 'Let in more than you tested, and the site falls over anyway.' },
+  ],
+});
+window.S8 = () => { stopAll(); T.show(); later(300, () => T.reveal(0)); };
+window.S8b = () => T.reveal(1);
+
+const Z = Say('say', 'The waiting room is behind a flag. On only if traffic beats the plan.');
+window.S9 = () => Z.show();
+</script>
+</body>
+</html>

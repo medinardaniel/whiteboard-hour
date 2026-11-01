@@ -1,0 +1,130 @@
+{
+ "target": "index.html",
+ "viewport": [
+  1920,
+  1080
+ ],
+ "voice": "en-US-AndrewMultilingualNeural",
+ "rate": "+6%",
+ "pronounce": {
+  "PCI": "P C I",
+  "API": "A P I"
+ },
+ "load_ms": 1200,
+ "gap_ms": 400,
+ "tail_ms": 1500,
+ "cues": [
+  {
+   "say": "Component seventeen: hosted checkout and webhooks.",
+   "post_ms": 900
+  },
+  {
+   "say": "Hosted checkout is a pattern for taking payments. Customers pay on the payment provider's own page, not yours. The provider then calls your server, with a webhook, to say the payment worked.",
+   "post_ms": 1200,
+   "do": "js:setTimeout(SD, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "With Stripe, that's Stripe Checkout. You never build a card form at all.",
+   "post_ms": 1100,
+   "do": "js:setTimeout(SD2, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "Why not build your own card form? Then card numbers pass through your servers, and maybe into your logs and database.",
+   "post_ms": 700,
+   "do": "js:setTimeout(S1, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "Anything that touches card numbers falls under PCI, the card industry's security rules. That means heavy audits for every server involved.",
+   "post_ms": 1200,
+   "do": "js:setTimeout(S1b, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "Instead, when the customer clicks pay, your server asks Stripe for a checkout session, with the order and amount. Stripe answers with a link.",
+   "post_ms": 700,
+   "do": "js:setTimeout(S2, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "The browser is redirected to Stripe's page, and the customer types their card there. The card number never touches your servers.",
+   "post_ms": 1000,
+   "do": "js:setTimeout(S2b, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "When the payment succeeds, Stripe calls your server. That's a webhook: the provider calling a web address of yours when something happens.",
+   "post_ms": 700,
+   "do": "js:setTimeout(S3, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "Why not just trust the redirect back to your site? The customer might close the tab first. The webhook comes either way.",
+   "post_ms": 1200,
+   "do": "js:setTimeout(S3b, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "Your webhook handler first checks the signature, proof the message came from Stripe. Then it saves the event's id.",
+   "post_ms": 700,
+   "do": "js:setTimeout(S4, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "It marks the order paid, and replies OK fast. Slow work, like texting the customer, goes on a queue for later.",
+   "post_ms": 1200,
+   "do": "js:setTimeout(S4b, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "Use it for every payment. Refunds and disputes arrive as webhooks too, so the same handler covers them.",
+   "post_ms": 1200,
+   "do": "js:setTimeout(S5, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "Now a real case: order forty-two, twenty-four dollars, at the pizza shop. The server creates a checkout session, and the customer pays on Stripe's page.",
+   "post_ms": 700,
+   "do": "js:setTimeout(S6, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "Stripe sends the webhook: event one, order forty-two paid. The server marks it paid, and replies OK.",
+   "post_ms": 800,
+   "do": "js:setTimeout(S6b, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "Later, the same event arrives again. Its id is already saved, so it's ignored. Without that check, the kitchen could cook the order twice.",
+   "post_ms": 1200,
+   "do": "js:setTimeout(S6c, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "Here's where it sits: the API talks to Stripe, the customer pays on Stripe's page, and the webhook comes back.",
+   "post_ms": 1200,
+   "do": "js:setTimeout(S7, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "Two things to know. Webhooks can repeat and arrive late, so ignore known ids, and never assume their order.",
+   "post_ms": 700,
+   "do": "js:setTimeout(S8, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "And Stripe has rate limits, about a hundred requests a second by default. Ask for more before a big launch.",
+   "post_ms": 1200,
+   "do": "js:setTimeout(S8b, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "In the interview, say: card data never touches our servers, which shrinks our PCI scope.",
+   "post_ms": 600,
+   "do": "js:setTimeout(S9, 0)",
+   "settle_ms": 350
+  }
+ ]
+}

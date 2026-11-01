@@ -1,0 +1,136 @@
+{
+ "target": "index.html",
+ "viewport": [
+  1920,
+  1080
+ ],
+ "voice": "en-US-AndrewMultilingualNeural",
+ "rate": "+6%",
+ "pronounce": {
+  "Multi-AZ": "multi A Z",
+  "API": "A P I"
+ },
+ "load_ms": 1200,
+ "gap_ms": 400,
+ "tail_ms": 1500,
+ "cues": [
+  {
+   "say": "Component fourteen: replicas and failover.",
+   "post_ms": 900
+  },
+  {
+   "say": "The primary is the one database that takes every write. Replicas are live, read-only copies of it, a fraction of a second behind. A standby is a spare copy that takes over if the primary dies.",
+   "post_ms": 1200,
+   "do": "js:setTimeout(SD, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "Every managed database offers both: you pick how many replicas, and switch the standby on.",
+   "post_ms": 1100,
+   "do": "js:setTimeout(SD2, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "Why do you need them? With one database, checkout and a heavy sales report share it. While the report runs, checkout slows down.",
+   "post_ms": 700,
+   "do": "js:setTimeout(S1, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "And if that machine fails, you're down for hours, while someone rebuilds it from a backup.",
+   "post_ms": 1200,
+   "do": "js:setTimeout(S1b, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "Here's how it works. Every write goes to one place, the primary. Stock goes from five to four.",
+   "post_ms": 700,
+   "do": "js:setTimeout(S2, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "The primary streams a log of its changes to the replicas, which replay it. The delay is called replication lag, usually well under a second.",
+   "post_ms": 1100,
+   "do": "js:setTimeout(S2b, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "Reads can go to any replica, so adding replicas adds read capacity.",
+   "post_ms": 1200,
+   "do": "js:setTimeout(S3, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "The standby is kept fully in sync, in another data center. Now the primary's machine dies, and writes start failing.",
+   "post_ms": 700,
+   "do": "js:setTimeout(S4, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "The cloud promotes the standby to be the new primary, usually within thirty to sixty seconds. That's failover. The app retries the writes that failed.",
+   "post_ms": 1200,
+   "do": "js:setTimeout(S4b, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "So, two uses. Replicas add read capacity, for reports and dashboards.",
+   "post_ms": 500,
+   "do": "js:setTimeout(S5, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "And the standby turns a crashed machine from hours of downtime into about a minute.",
+   "post_ms": 1200,
+   "do": "js:setTimeout(S5b, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "Now a real case. A bike shop's morning sales report slows down checkout.",
+   "post_ms": 700,
+   "do": "js:setTimeout(S6, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "Point the report at a replica, and checkout has the primary to itself.",
+   "post_ms": 1100,
+   "do": "js:setTimeout(S6b, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "Then, at two AM, the primary's machine fails. Without a standby, the shop is down for hours.",
+   "post_ms": 800,
+   "do": "js:setTimeout(S6c, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "With a standby, it's promoted within a minute. A few writes are retried, and by morning, nobody knows.",
+   "post_ms": 1200,
+   "do": "js:setTimeout(S6d, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "Here's where it sits. Orders go to the primary, which keeps the standby in sync. Reports read from a replica.",
+   "post_ms": 1200,
+   "do": "js:setTimeout(S7, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "Two things to know. A replica can be a moment behind, which is fine for a report, but wrong for \"is this in stock?\"",
+   "post_ms": 700,
+   "do": "js:setTimeout(S8, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "And failover is a blip, not zero. The app must retry, and the standby roughly doubles the database bill.",
+   "post_ms": 1200,
+   "do": "js:setTimeout(S8b, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "In the interview, say: never read stock you're about to sell from a replica. It can be a moment behind.",
+   "post_ms": 600,
+   "do": "js:setTimeout(S9, 0)",
+   "settle_ms": 350
+  }
+ ]
+}

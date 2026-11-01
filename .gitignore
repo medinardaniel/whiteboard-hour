@@ -7,3 +7,5 @@ videos/lecture/*/raw*
 videos/lecture/*/preview/
 videos/lecture/*/f*.png
 videos/lecture/*/c*-lecture.*
+videos/lecture/*/cues_build/
+videos/lecture/*/raw_build/

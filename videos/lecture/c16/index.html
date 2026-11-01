@@ -1,0 +1,228 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="color-scheme" content="light">
+<title>Pre-scaling: lecture</title>
+<link rel="stylesheet" href="../lib/lecture.css">
+<script src="../lib/icons.js"></script>
+<script src="../lib/lecture.js"></script>
+</head>
+<body>
+<script>
+// ---- page helpers (dots that move, timers that stop with the scene)
+const NS = 'http://www.w3.org/2000/svg', COL = { acc: '#2456c7', good: '#1a7f37', bad: '#cf222e', warn: '#bf8700', muted: '#5f6368' };
+const mk = (parent, tag, attrs) => { const e = document.createElementNS(NS, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); parent.append(e); return e; };
+let timers = [];
+// loops stop on their own after `life` ms, so the screen settles (lighter on the recorder)
+const every = (ms, fn, life = 7000) => { const id = setInterval(fn, ms); timers.push(id); timers.push(setTimeout(() => clearInterval(id), life)); return id; };
+const later = (ms, fn) => { const id = setTimeout(fn, ms); timers.push(id); return id; };
+const stopAll = () => { timers.forEach(id => { clearInterval(id); clearTimeout(id); }); timers = []; };
+function dot(d, x, y, o = {}) {
+  const r = o.r || 26, g = mk(d.fx, 'g', {});
+  g.style.transition = `transform ${o.ms || 700}ms cubic-bezier(.4,0,.2,1), opacity .5s`;
+  const P = {
+    g, x, y,
+    to(x, y) { this.x = x; this.y = y; g.style.transform = `translate(${x}px,${y}px)`; return this; },
+    color(c) { this.c.setAttribute('fill', COL[c] || c); return this; },
+    set(t) { this.t.textContent = t; return this; },
+    note(t, c = 'warn') {
+      if (!this.n) this.n = mk(g, 'text', { y: -r - 14, 'text-anchor': 'middle', style: 'font-size:26px;font-weight:800' });
+      this.n.setAttribute('fill', COL[c] || c); this.n.textContent = t; return this;
+    },
+    fade() { g.style.opacity = 0; setTimeout(() => g.remove(), 600); },
+  };
+  P.to(x, y);
+  P.c = mk(g, 'circle', { r, fill: COL[o.color || 'acc'] || o.color });
+  P.t = mk(g, 'text', { y: 8, 'text-anchor': 'middle', fill: '#fff', style: `font-size:${o.fs || 22}px;font-weight:800` });
+  P.t.textContent = o.label == null ? '' : o.label;
+  return P;
+}
+// a soft rounded area drawn behind the nodes, with a title
+function area(d, x1, y1, x2, y2, title, o = {}) {
+  const g = mk(d.bg, 'g', {});
+  mk(g, 'rect', { x: x1, y: y1, width: x2 - x1, height: y2 - y1, rx: 30, fill: o.fill || '#eef0f4', stroke: o.stroke || 'none', 'stroke-width': 3, 'stroke-dasharray': o.dash ? '10 8' : '' });
+  if (title) { const t = mk(g, 'text', { x: o.tx || (x1 + x2) / 2, y: y1 + 40, 'text-anchor': 'middle', fill: o.tc || '#5f6368', style: 'font-size:26px;font-weight:700;letter-spacing:.04em' }); t.textContent = title; }
+  return g;
+}
+const fadeIn = (e, on = true) => { e.style.transition = 'opacity .5s'; e.style.opacity = on ? 1 : 0; };
+// The lib's send() steps with requestAnimationFrame, which can stall in headless recording when little else moves
+// (a chain of awaited sends then runs seconds late). Same animation, stepped with setTimeout and performance.now().
+Diagram.prototype.send = function (a, b, opts = {}) {
+  const p = this.N[a] || a, q = this.N[b] || b, dur = opts.dur || 900, r = opts.r || 11, c = COL[opts.color] || opts.color || COL.acc;
+  return new Promise(res => {
+    const g = mk(this.fx, 'g', {});
+    mk(g, 'circle', { r, fill: c });
+    if (opts.label) { const t = mk(g, 'text', { y: -r - 8, class: 'tag', fill: c, style: 'font-size:22px' }); t.textContent = opts.label; }
+    const mx = (p.x + q.x) / 2, my = (p.y + q.y) / 2 - (opts.curve || 0), t0 = performance.now();
+    const step = () => {
+      const k = Math.min(1, (performance.now() - t0) / dur), e = k < .5 ? 2 * k * k : 1 - Math.pow(-2 * k + 2, 2) / 2;
+      const x = (1 - e) ** 2 * p.x + 2 * (1 - e) * e * mx + e * e * q.x, y = (1 - e) ** 2 * p.y + 2 * (1 - e) * e * my + e * e * q.y;
+      g.setAttribute('transform', `translate(${x},${y})`);
+      if (k < 1) setTimeout(step, 16); else { g.remove(); res(); }
+    };
+    step();
+  });
+};
+
+Title({ num: 16, name: 'Pre-scaling', sub: 'Get big before the spike, not during it', phase: 'Survive the spike', pills: ['Any planned event', 'Autoscaling as a safety net'] });
+
+// draw an SVG path progressively over ms
+function drawPath(p, ms) {
+  const L = p.getTotalLength(); p.style.strokeDasharray = L; p.style.strokeDashoffset = L;
+  return p.animate([{ strokeDashoffset: L }, { strokeDashoffset: 0 }], { duration: ms, fill: 'forwards', easing: 'ease-in-out' }).finished;
+}
+
+// ---- definition: get big at 5 PM, the spike lands at 6
+const D = Define('def', {
+  html: 'A practice: <b>add server copies and upgrade the database before a spike you know is coming</b>, instead of waiting for the system to react.',
+  extra: { label: 'By hand, or on a schedule:', pills: ['A launch checklist', 'Scheduled scaling'] },
+});
+const dd = D.d;
+dd.node('u', 110, 560, 'users', 'Visitors', '', { w: 150 });
+const dK = [0, 1, 2, 3, 4, 5].map(i => { const k = 'c' + i; dd.node(k, 430, 260 + i * 120, null, 'Copy ' + (i + 1), '', { w: 170, h: 88, hidden: i > 1 }); return k; });
+dd.node('db', 790, 560, 'db', 'Database', 'small', { w: 190 });
+const dLk = dK.map(k => { const l = dd.link(k, 'db'); if (k !== 'c0' && k !== 'c1') l.style.opacity = 0; return l; });
+const dClk = dd.text(480, 120, '5:00 PM', { size: 60, color: 'acc' });
+window.SD = async () => {
+  D.show(); await sleep(1200);
+  for (let i = 2; i < 6; i++) { dd.pop(dK[i]); dLk[i].style.opacity = 1; await sleep(350); }
+  dd.rename('db', 'Database', 'bigger size'); dd.badge('db', 'upgraded', 'good');
+  await sleep(2200);
+  dClk.textContent = '6:05 PM'; dClk.setAttribute('fill', COL.good);
+  every(110, () => dd.send('u', dK[Math.floor(Math.random() * 6)], { dur: 600, r: 9, color: 'good' }));
+};
+window.SD2 = () => D.more();
+
+// ---- the problem: autoscaling reacts in minutes
+const P = Stage('prob', { caption: ['Autoscaling', 'The cloud adds copies when servers get busy'] });
+P.node('u', 200, 620, 'users', 'Customers', '', { w: 190 });
+P.node('lb', 520, 620, 'split', 'Load balancer', '', { w: 210 });
+P.node('c1', 880, 380, 'server', 'Copy 1', '', { w: 170 });
+P.node('c2', 880, 620, 'server', 'Copy 2', '', { w: 170 });
+P.node('c3', 880, 870, 'server', 'New copy', 'starting...', { w: 190, hidden: true, tone: 'muted' });
+P.node('as', 1500, 300, 'gauge', 'Autoscaling', 'watches CPU', { w: 230, hidden: true });
+P.link('u', 'lb'); P.link('lb', 'c1'); P.link('lb', 'c2'); P.link('lb', 'c3', { id: 'lb-c3', dash: true }).style.opacity = 0;
+P.link('as', 'c1', { dash: true, curve: 40 }); P.link('as', 'c2', { dash: true, curve: 40 });
+const PP = Panel(P, { x: 1240, y: 520, w: 560, title: 'Before a new copy helps', items: ['Busy for a few minutes?', 'Boot new copies', 'Pass health checks'] });
+let rate = 600;
+function traffic() { const to = Math.random() < .5 ? 'c1' : 'c2'; P.send('u', 'lb', { dur: 380, r: 9 }).then(() => P.send('lb', to, { dur: 380, r: 9 })); }
+window.S1 = async () => {
+  stopAll(); P.show(); P.meter('c1', .2); P.meter('c2', .2);
+  every(600, traffic); await sleep(800); P.pop('as');
+  every(1200, () => { P.send('c1', 'as', { dur: 700, r: 7, color: 'muted', curve: 40 }); P.send('c2', 'as', { dur: 700, r: 7, color: 'muted', curve: 40 }); });
+};
+window.S1b = async () => {
+  stopAll(); P.cap('The spike hits', 'Autoscaling waits, then boots new copies');
+  every(150, traffic); every(250, () => { P.bump('c1', .04); P.bump('c2', .04); });
+  await sleep(600); PP.on(0); await sleep(2800); PP.on(1); P.pop('c3'); P.L['lb-c3'].style.opacity = 1; P.ring('c3', 6500, 'warn');
+  await sleep(3000); PP.on(2);
+};
+window.S1c = async () => {
+  P.cap('Meanwhile: errors', 'The spike arrives in seconds');
+  every(700, () => P.tag('u', 'error', 'bad', -100));
+  await sleep(3200); P.tone('c3', 'good'); P.rename('c3', 'New copy', 'ready, too late'); P.linkTone('lb-c3', 'good');
+};
+
+// ---- how it works: get ready an hour before
+const M = Stage('how', { caption: ['Pre-scaling flips the order', 'You know when, so get ready before'] });
+mk(M.bg, 'line', { x1: 220, y1: 300, x2: 1150, y2: 300, stroke: '#b8bfcc', 'stroke-width': 6, 'stroke-linecap': 'round' });
+const mkMark = (x, t, c) => { mk(M.fx, 'circle', { cx: x, cy: 300, r: 14, fill: COL[c] }); return M.text(x, 350, t, { size: 30, color: c }); };
+mkMark(330, '5:00 PM: get ready', 'good'); mkMark(1000, '6:00 PM: the spike', 'bad');
+const now = mk(M.fx, 'polygon', { points: '-16,-30 16,-30 0,-8', fill: COL.acc }); now.style.transition = 'transform .8s'; now.style.transform = 'translate(330px,290px)';
+M.node('cdn', 220, 650, 'globe', 'CDN', 'cold', { w: 170 });
+M.node('lb', 480, 650, 'split', 'Load balancer', '', { w: 200 });
+const mK = [0, 1, 2, 3, 4, 5].map(i => { const k = 'm' + i; M.node(k, 790, 420 + i * 100, null, 'Copy ' + (i + 1), '', { w: 170, h: 80, hidden: i > 1 }); return k; });
+M.node('db', 1110, 650, 'db', 'Postgres', 'small', { w: 190 });
+M.link('cdn', 'lb'); const mLk = mK.map((k, i) => { const a = M.link('lb', k), b = M.link(k, 'db'); if (i > 1) { a.style.opacity = 0; b.style.opacity = 0; } return [a, b]; });
+const MP = Panel(M, { x: 1320, y: 420, w: 540, title: 'One hour before', items: ['Copies: 2 → 6', 'Database: bigger size', 'CDN: warmed', 'Autoscaling: on, as a net'] });
+window.S2 = () => { stopAll(); M.show(); };
+window.S3 = async () => { MP.on(0); for (let i = 2; i < 6; i++) { M.pop(mK[i]); mLk[i].forEach(l => l.style.opacity = 1); await sleep(300); } };
+window.S3b = async () => {
+  MP.on(1); M.badge('db', 'restart: a quiet hour', 'warn'); await sleep(1600);
+  M.rename('db', 'Postgres', 'bigger size'); M.tone('db', 'good');
+};
+window.S3c = async () => {
+  MP.on(2); M.unbadge('db');
+  for (let i = 0; i < 3; i++) { await M.send('lb', 'cdn', { dur: 500, r: 9, color: 'good', label: i ? '' : '/menu' }); }
+  M.rename('cdn', 'CDN', 'warm'); M.tone('cdn', 'good');
+};
+window.S3d = () => { MP.on(3); M.badge('lb', 'autoscaling on', 'acc'); now.style.transform = 'translate(1000px,290px)'; };
+
+// ---- what it's for
+const U = Cards('uses', {
+  head: 'Any spike you can see coming', items: [
+    { icon: 'clock', title: 'A sale you scheduled', text: 'You picked the minute.' },
+    { icon: 'envelope', title: 'An email to every customer', text: 'Clicks arrive within minutes.' },
+    { icon: 'broadcast', title: 'A TV mention or a big game', text: 'You know the air time.' },
+  ],
+});
+window.S5 = () => { stopAll(); U.show(); later(300, () => U.reveal(0)); later(2200, () => U.reveal(1)); later(3700, () => U.reveal(2)); };
+
+// ---- scenario: snow forecast on the 6 PM news, two timelines
+const S = Stage('scen', { head: 'Tire shop: snow forecast on the 6 PM news' });
+const X0 = 300, X1 = 1740, PX = (X1 - X0) / 12;          // 6:00 to 6:12
+const xm = m => X0 + m * PX;
+const charts = [{ y: 540, title: 'Without pre-scaling', c: 'bad' }, { y: 960, title: 'With pre-scaling', c: 'good' }];
+const HH = 270;
+charts.forEach(ch => {
+  S.text(X0 - 40, ch.y - HH - 55, ch.title, { color: ch.c, size: 36, anchor: 'start' });
+  mk(S.bg, 'line', { x1: X0, y1: ch.y, x2: X1, y2: ch.y, stroke: '#5f6368', 'stroke-width': 4 });
+  for (let m = 0; m <= 12; m += 2) S.text(xm(m), ch.y + 36, `6:${String(m).padStart(2, '0')}`, { color: 'muted', size: 24, weight: 600 });
+});
+// traffic: flat, then 20x in about two minutes
+const tr = m => m < 3 ? .05 : m < 5.6 ? .05 + .75 * Math.pow((m - 3) / 2.6, 2.2) : .8 + .02 * Math.sin(m * 3);
+const trafficPath = y0 => { let d = ''; for (let m = 0; m <= 12; m += .1) d += (d ? 'L' : 'M') + xm(m).toFixed(1) + ',' + (y0 - tr(m) * HH).toFixed(1); return d; };
+const tPaths = charts.map(ch => { const p = mk(S.links, 'path', { d: trafficPath(ch.y), fill: 'none', stroke: COL.acc, 'stroke-width': 7 }); p.style.opacity = 0; return p; });
+const tLbl = charts.map(ch => { const t = S.text(xm(10.6), ch.y - .8 * HH + 48, 'traffic: 20x', { color: 'acc', size: 28 }); fadeIn(t, false); return t; });
+// capacity lines
+const lowY = charts[0].y - .3 * HH, hiY = c => c.y - .93 * HH;
+const capA = mk(S.links, 'path', { d: `M${X0},${lowY} L${xm(9)},${lowY} L${xm(9)},${hiY(charts[0])} L${X1},${hiY(charts[0])}`, fill: 'none', stroke: COL.good, 'stroke-width': 6, 'stroke-dasharray': '14 10' }); capA.style.opacity = 0;
+const capB = mk(S.links, 'path', { d: `M${X0},${hiY(charts[1])} L${X1},${hiY(charts[1])}`, fill: 'none', stroke: COL.good, 'stroke-width': 6, 'stroke-dasharray': '14 10' }); capB.style.opacity = 0;
+const capAL = S.text(xm(.2), lowY - 14, 'what 2 copies handle', { color: 'good', size: 24, anchor: 'start' }); fadeIn(capAL, false);
+const capBL = S.text(xm(.2), hiY(charts[1]) - 14, '5 PM: 6 copies, bigger database, CDN warmed', { color: 'good', size: 26, anchor: 'start' }); fadeIn(capBL, false);
+// the error area: traffic above capacity, 6:05 to 6:09
+let ed = `M${xm(5)},${lowY}`; for (let m = 5; m <= 9.001; m += .1) ed += `L${xm(m).toFixed(1)},${(charts[0].y - Math.max(.3, tr(m)) * HH).toFixed(1)}`; ed += `L${xm(9)},${lowY}Z`;
+const errA = mk(S.bg, 'path', { d: ed, fill: '#fdecee', stroke: 'none' }); errA.style.opacity = 0; errA.style.transition = 'opacity .6s';
+const errT = S.text(xm(7.5), lowY + 50, '4 minutes of errors', { color: 'bad', size: 32 }); fadeIn(errT, false);
+const vline = (m, t) => { const g = mk(S.fx, 'g', {}); g.style.opacity = 0; g.style.transition = 'opacity .5s'; mk(g, 'line', { x1: xm(m), y1: charts[0].y, x2: xm(m), y2: charts[0].y - HH - 10, stroke: COL.muted, 'stroke-width': 3, 'stroke-dasharray': '6 6' }); const tt = mk(g, 'text', { x: xm(m) + 10, y: charts[0].y - HH + 10, fill: COL.muted, style: 'font-size:24px;font-weight:700' }); tt.textContent = t; return g; };
+const v6 = vline(6, '6:06 autoscaling notices'), v9 = vline(9, '6:09 copies ready');
+const okT = S.text(xm(7.5), charts[1].y - .3 * HH, 'already sized: no errors', { color: 'good', size: 32 }); fadeIn(okT, false);
+window.S6 = async () => {
+  stopAll(); S.show(); await sleep(400);
+  tPaths.forEach(p => { p.style.opacity = 1; drawPath(p, 2600); });
+  await sleep(2400); tLbl.forEach(t => fadeIn(t));
+};
+window.S6b = async () => {
+  capA.style.opacity = 1; fadeIn(capAL); drawPath(capA, 1200); await sleep(1200);
+  v6.style.opacity = 1; await sleep(600); v9.style.opacity = 1; errA.style.opacity = 1; fadeIn(errT);
+};
+window.S6c = async () => {
+  capB.style.opacity = 1; fadeIn(capBL); drawPath(capB, 1400); await sleep(1400);
+  fadeIn(okT);
+};
+
+// ---- where it applies
+const Y = System('sys', { highlight: ['cdn', 'api', 'db', 'worker'], caption: ['Where it applies', 'Before the spike, size every busy part'], labels: { cdn: ['CDN', 'warmed'], api: ['API', '2 → 6 copies'], db: ['Postgres', 'bigger size'], worker: ['Workers', 'by queue length'] } });
+window.S7 = async () => {
+  stopAll(); Y.show(); await sleep(500);
+  Y.badge('cdn', 'warm', 'good'); await sleep(700); Y.badge('api', '6 copies', 'good'); await sleep(700); Y.badge('db', 'bigger', 'good');
+  await sleep(1500); Y.badge('worker', 'queue length', 'acc', 'bottom');
+  every(1400, () => Y.flow(['browser', 'cdn', 'lb', 'api', 'db'], { dur: 380, color: 'good' }));
+};
+
+// ---- trade-offs
+const T = Cards('trade', {
+  head: 'Two trade-offs', cols: 2, items: [
+    { icon: 'money', color: 'warn', title: 'You pay for idle copies', text: 'A few hours of extra servers. Cheap next to four minutes of errors.' },
+    { icon: 'bolt', color: 'bad', title: 'Only for spikes you can see', text: 'Surprises still need autoscaling, rate limits and a waiting room.' },
+  ],
+});
+window.S8 = () => { stopAll(); T.show(); later(300, () => T.reveal(0)); };
+window.S8b = () => T.reveal(1);
+
+const Z = Say('say', 'Autoscaling reacts in minutes. The spike arrives in seconds.');
+window.S9 = () => Z.show();
+</script>
+</body>
+</html>

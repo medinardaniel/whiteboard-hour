@@ -1,0 +1,132 @@
+{
+ "target": "index.html",
+ "viewport": [
+  1920,
+  1080
+ ],
+ "voice": "en-US-AndrewMultilingualNeural",
+ "rate": "+6%",
+ "pronounce": {
+  "PgBouncer": "P G bouncer",
+  "RDS": "R D S",
+  "API": "A P I",
+  "5 ms": "five milliseconds"
+ },
+ "load_ms": 1200,
+ "gap_ms": 400,
+ "tail_ms": 1500,
+ "cues": [
+  {
+   "say": "Component fifteen: the connection pooler.",
+   "post_ms": 900
+  },
+  {
+   "say": "A connection pooler is a small server that sits between your app and Postgres. It keeps a few real database connections open, and shares them among all your server copies.",
+   "post_ms": 1200,
+   "do": "js:setTimeout(SD, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "The classic one is PgBouncer. Clouds offer managed ones too, like Amazon RDS Proxy.",
+   "post_ms": 1100,
+   "do": "js:setTimeout(SD2, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "First, what's a connection? It's an open line from your app to the database. Postgres runs a separate process for each one, so it can only afford a few hundred. The default limit is one hundred.",
+   "post_ms": 700,
+   "do": "js:setTimeout(S1, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "Each server copy keeps its own set open, say twenty, so it doesn't have to open a new one for every request. Add copies, and the count multiplies.",
+   "post_ms": 700,
+   "do": "js:setTimeout(S1b, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "Past the limit, Postgres refuses new connections. Copy six can't connect, and its requests fail.",
+   "post_ms": 1200,
+   "do": "js:setTimeout(S1c, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "The pooler fixes this. Every copy connects to the pooler instead, and those connections are cheap.",
+   "post_ms": 700,
+   "do": "js:setTimeout(S2, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "Behind it, the pooler keeps a small set of real connections to Postgres.",
+   "post_ms": 700,
+   "do": "js:setTimeout(S3, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "When a copy runs a transaction, the pooler lends it a real connection, for just the milliseconds it takes, then puts it back.",
+   "post_ms": 1000,
+   "do": "js:setTimeout(S3b, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "Why are a few enough? If a query takes five milliseconds, one connection can run two hundred a second. Fifty connections: ten thousand a second.",
+   "post_ms": 1200,
+   "do": "js:setTimeout(S3c, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "So you need one as soon as you add copies of your API.",
+   "post_ms": 500,
+   "do": "js:setTimeout(S5, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "And whenever many short-lived workers or functions each want their own connection.",
+   "post_ms": 1200,
+   "do": "js:setTimeout(S5b, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "Now a real case. Before the game, the pizza shop scales from two copies to twenty, with twenty connections each. That's four hundred connections.",
+   "post_ms": 800,
+   "do": "js:setTimeout(S6, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "Their database allows two hundred. Copies one to ten connect. Copies eleven to twenty can't, and fail right at kickoff.",
+   "post_ms": 1000,
+   "do": "js:setTimeout(S6b, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "With a pooler, all twenty copies connect to it, and it keeps fifty real connections. The database stays well under its limit.",
+   "post_ms": 1200,
+   "do": "js:setTimeout(S6c, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "Here's where it sits: between your API copies and Postgres. Every query goes through it.",
+   "post_ms": 1200,
+   "do": "js:setTimeout(S7, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "Two things to know. Keep transactions short. Never wait on Stripe while holding a connection, or the pool runs dry.",
+   "post_ms": 700,
+   "do": "js:setTimeout(S8, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "And each transaction may get a different real connection, so don't rely on settings that live in one session.",
+   "post_ms": 1200,
+   "do": "js:setTimeout(S8b, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "In the interview, say: Postgres allows a few hundred connections. Without a pooler, scaling the API takes down the database.",
+   "post_ms": 600,
+   "do": "js:setTimeout(S9, 0)",
+   "settle_ms": 350
+  }
+ ]
+}

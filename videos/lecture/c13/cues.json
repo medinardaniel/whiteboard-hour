@@ -1,0 +1,136 @@
+{
+ "target": "index.html",
+ "viewport": [
+  1920,
+  1080
+ ],
+ "voice": "en-US-AndrewMultilingualNeural",
+ "rate": "+6%",
+ "pronounce": {
+  "CDN": "C D N",
+  "Queue-it": "queue it"
+ },
+ "load_ms": 1200,
+ "gap_ms": 400,
+ "tail_ms": 1500,
+ "cues": [
+  {
+   "say": "Component thirteen: the waiting room.",
+   "post_ms": 900
+  },
+  {
+   "say": "A waiting room is a holding page that sits in front of your site. When demand is too high, visitors wait there in line, and they're let into the real site at a fixed rate.",
+   "post_ms": 1200,
+   "do": "js:setTimeout(SD, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "You don't build it. You switch it on at your CDN, or buy it from a vendor like Queue-it.",
+   "post_ms": 1100,
+   "do": "js:setTimeout(SD2, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "Why do you need one? Picture a sale that starts at an exact minute. Thousands of people sit on the page, pressing refresh.",
+   "post_ms": 700,
+   "do": "js:setTimeout(S1, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "At the start, they all hit the servers in the same second, and the site falls over for everyone.",
+   "post_ms": 700,
+   "do": "js:setTimeout(S1b, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "And even if it survives, it isn't fair. Whoever has the fastest connection, or a bot, gets in first.",
+   "post_ms": 1200,
+   "do": "js:setTimeout(S1c, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "So instead, every visitor lands on the line page first, and gets a place in line.",
+   "post_ms": 700,
+   "do": "js:setTimeout(S2, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "Everyone who arrived before the start is shuffled, so being early, or fast, doesn't put you first.",
+   "post_ms": 1000,
+   "do": "js:setTimeout(S3, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "Then the waiting room lets people in at a fixed rate, the rate your site was load tested for. Everyone else watches their place count down.",
+   "post_ms": 700,
+   "do": "js:setTimeout(S4, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "Each person let in gets a pass, stored in a cookie, so they can move around the site without queueing again.",
+   "post_ms": 1200,
+   "do": "js:setTimeout(S4b, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "When do you use one? First, when demand is far above what you can serve, even after adding servers.",
+   "post_ms": 500,
+   "do": "js:setTimeout(S5, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "Second, when a sale starts at an exact minute, and everyone arrives at once.",
+   "post_ms": 1200,
+   "do": "js:setTimeout(S5b, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "Now a real case. An electronics shop's sale starts at exactly six AM. Forty thousand people are refreshing, and checkout was tested for three hundred a second.",
+   "post_ms": 800,
+   "do": "js:setTimeout(S6, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "Without a waiting room, forty thousand requests land at once, and checkout falls over at six o'clock.",
+   "post_ms": 800,
+   "do": "js:setTimeout(S6b, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "With one, it lets in three hundred a second, so checkout runs at the load it was tested for. The last person in line gets in a little after six oh two.",
+   "post_ms": 1200,
+   "do": "js:setTimeout(S6c, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "It sits at the edge, in front of everything, often as a CDN feature. Visitors with a pass go straight through.",
+   "post_ms": 700,
+   "do": "js:setTimeout(S7, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "On a normal day it's off, behind a feature flag: a switch you flip without deploying code.",
+   "post_ms": 1200,
+   "do": "js:setTimeout(S7b, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "Two trade-offs. Waiting is a real cost to your customers, so only turn it on when traffic beats the plan.",
+   "post_ms": 700,
+   "do": "js:setTimeout(S8, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "And the rate is only as good as your load test. Let in more than you tested, and the site falls over anyway.",
+   "post_ms": 1200,
+   "do": "js:setTimeout(S8b, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "In the interview, say: the waiting room is behind a flag, on only if traffic beats the plan.",
+   "post_ms": 600,
+   "do": "js:setTimeout(S9, 0)",
+   "settle_ms": 350
+  }
+ ]
+}
