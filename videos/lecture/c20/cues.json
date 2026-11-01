@@ -1,0 +1,139 @@
+{
+ "target": "index.html",
+ "viewport": [
+  1920,
+  1080
+ ],
+ "voice": "en-US-AndrewMultilingualNeural",
+ "rate": "+6%",
+ "pronounce": {
+  "API": "A P I",
+  "p95": "p ninety-five",
+  "P95": "P ninety-five",
+  "AM": "A M",
+  "k6": "k six"
+ },
+ "load_ms": 1200,
+ "gap_ms": 400,
+ "tail_ms": 1500,
+ "cues": [
+  {
+   "say": "Component twenty: the load test and the game day.",
+   "post_ms": 900
+  },
+  {
+   "say": "Two practices before a launch. A load test fires fake traffic, two to three times the expected peak, at a test copy, against a pass bar. A game day is a rehearsal: flip switches, fake outages.",
+   "post_ms": 1200,
+   "do": "js:setTimeout(SD, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "Tools like k6 or Locust play the fake users.",
+   "post_ms": 1100,
+   "do": "js:setTimeout(SD2, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "Why bother? Otherwise you find problems on sale day. At six AM, checkout crawls: a missing index. An index lets the database jump to the rows it needs, instead of reading every row.",
+   "post_ms": 700,
+   "do": "js:setTimeout(S1, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "Then payments fail, and nobody has practiced pausing orders.",
+   "post_ms": 1200,
+   "do": "js:setTimeout(S1b, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "A load test starts with a script of one user: open the deal, add the TV, and pay, with Stripe in test mode. The tool runs thousands at once.",
+   "post_ms": 900,
+   "do": "js:setTimeout(S2, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "It ramps traffic past the expected peak, to two or three times it, aimed at staging: a test copy, never real customers.",
+   "post_ms": 900,
+   "do": "js:setTimeout(S3, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "And you write the pass bar first. Zero TVs oversold, zero double charges, and p95 under five hundred milliseconds.",
+   "post_ms": 700,
+   "do": "js:setTimeout(S3b, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "P95 means ninety-five percent of requests are faster than that. It shows the slow tail.",
+   "post_ms": 1200,
+   "do": "js:setTimeout(S3c, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "A game day is the rehearsal: flip every switch, fake Stripe errors, check that alerts fire, and time each response.",
+   "post_ms": 1200,
+   "do": "js:setTimeout(S4, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "The load test finds slow queries, missing indexes, and too few copies.",
+   "post_ms": 600,
+   "do": "js:setTimeout(S5, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "The game day finds switches that don't work, and alerts that don't fire.",
+   "post_ms": 1200,
+   "do": "js:setTimeout(S5b, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "Now a real case, two days before a doorbuster sale. k6 simulates a hundred and twenty thousand visitors. A thousand try to buy one TV deal, with fifty in stock.",
+   "post_ms": 900,
+   "do": "js:setTimeout(S6, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "Run one sells exactly fifty, with no double charges, but fails the p95 bar: a missing index.",
+   "post_ms": 900,
+   "do": "js:setTimeout(S6b, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "Add the index, rerun, and it passes. Found two days early, not at six AM on sale day.",
+   "post_ms": 1100,
+   "do": "js:setTimeout(S6c, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "Then the game day: every switch flipped, Stripe errors faked, the response timed.",
+   "post_ms": 1200,
+   "do": "js:setTimeout(S6d, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "It sits outside your system, aimed at a full copy of it, with Stripe in test mode.",
+   "post_ms": 1200,
+   "do": "js:setTimeout(S7, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "Two things to know. Size staging like production, or the numbers lie.",
+   "post_ms": 700,
+   "do": "js:setTimeout(S8, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "And fake traffic is a guess, so model real users: most browse, a few buy.",
+   "post_ms": 1200,
+   "do": "js:setTimeout(S8b, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "In the interview, say: pass means zero oversold, zero double charges, and p95 under five hundred milliseconds.",
+   "post_ms": 600,
+   "do": "js:setTimeout(S9, 0)",
+   "settle_ms": 350
+  }
+ ]
+}

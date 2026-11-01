@@ -1,0 +1,155 @@
+{
+ "target": "index.html",
+ "viewport": [
+  1920,
+  1080
+ ],
+ "voice": "en-US-AndrewMultilingualNeural",
+ "rate": "+6%",
+ "pronounce": {
+  "API": "A P I",
+  "HTTP": "H T T P",
+  "SMS": "S M S"
+ },
+ "load_ms": 1200,
+ "gap_ms": 400,
+ "tail_ms": 1500,
+ "cues": [
+  {
+   "say": "Component eighteen: timeouts, retries, and the circuit breaker.",
+   "post_ms": 900
+  },
+  {
+   "say": "Three rules for any call to an outside service, like Stripe: give up after a few seconds, retry with growing waits, and stop calling for a while after repeated failures.",
+   "post_ms": 1200,
+   "do": "js:setTimeout(SD, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "It's a pattern, not a product: a few settings in your HTTP client.",
+   "post_ms": 1100,
+   "do": "js:setTimeout(SD2, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "Why does it matter? On game day, Stripe slows from three hundred milliseconds to eight seconds, and each checkout holds a thread while it waits.",
+   "post_ms": 700,
+   "do": "js:setTimeout(S1, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "Soon every thread is waiting, and even the menu stops loading.",
+   "post_ms": 1200,
+   "do": "js:setTimeout(S1b, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "Rule one, the timeout: the longest you'll wait. Say two seconds, then give up and free the thread.",
+   "post_ms": 1000,
+   "do": "js:setTimeout(S2, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "Rule two: retry, waiting longer each time. That's backoff: a hundred milliseconds, then two hundred, then four hundred.",
+   "post_ms": 700,
+   "do": "js:setTimeout(S3, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "Add a small random wait, called jitter, so clients don't retry in sync. And reuse the same idempotency key, so Stripe charges once.",
+   "post_ms": 1200,
+   "do": "js:setTimeout(S3b, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "Rule three, the circuit breaker. It starts closed: calls flow through. After five failures in a row, it opens.",
+   "post_ms": 700,
+   "do": "js:setTimeout(S4, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "While it's open, calls fail instantly for thirty seconds. Checkout says: try again in a minute.",
+   "post_ms": 700,
+   "do": "js:setTimeout(S4b, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "Then it goes half-open: one test call. If it works, it closes. If not, it opens again.",
+   "post_ms": 1200,
+   "do": "js:setTimeout(S4c, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "Wrap every call that leaves your system: payments to Stripe,",
+   "post_ms": 300,
+   "do": "js:setTimeout(S5, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "texts and email, retried by a worker so the order never waits,",
+   "post_ms": 300,
+   "do": "js:setTimeout(S5b, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "and anything else outside your system, like shipping rates or maps.",
+   "post_ms": 1200,
+   "do": "js:setTimeout(S5c, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "Now the pizza shop on game day, with Stripe at eight seconds.",
+   "post_ms": 800,
+   "do": "js:setTimeout(S6, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "Without the rules, each checkout holds a thread for eight seconds. The threads fill up, and the site stalls.",
+   "post_ms": 800,
+   "do": "js:setTimeout(S6b, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "With them, each call gives up at two seconds and retries once. Five failures in a row, and the circuit opens for thirty seconds.",
+   "post_ms": 700,
+   "do": "js:setTimeout(S6c, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "Checkout says try again in a minute. The threads stay free, and the menu stays fast.",
+   "post_ms": 1200,
+   "do": "js:setTimeout(S6d, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "It sits inside the API, around every call to Stripe.",
+   "post_ms": 600,
+   "do": "js:setTimeout(S7, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "And in the workers, around every text they send.",
+   "post_ms": 1200,
+   "do": "js:setTimeout(S7b, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "Two things to watch. Retries add load, so retry only a few times, with backoff.",
+   "post_ms": 700,
+   "do": "js:setTimeout(S8, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "And only retry what's safe: a payment retried without the same key can be charged twice.",
+   "post_ms": 1200,
+   "do": "js:setTimeout(S8b, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "In the interview, say: retries are safe only because the call carries an idempotency key.",
+   "post_ms": 600,
+   "do": "js:setTimeout(S9, 0)",
+   "settle_ms": 350
+  }
+ ]
+}

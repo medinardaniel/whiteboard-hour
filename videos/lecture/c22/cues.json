@@ -1,0 +1,130 @@
+{
+ "target": "index.html",
+ "viewport": [
+  1920,
+  1080
+ ],
+ "voice": "en-US-AndrewMultilingualNeural",
+ "rate": "+6%",
+ "pronounce": {
+  "p95": "p ninety-five",
+  "PM": "P M"
+ },
+ "load_ms": 1200,
+ "gap_ms": 400,
+ "tail_ms": 1500,
+ "cues": [
+  {
+   "say": "Component twenty-two: dashboards and alerts.",
+   "post_ms": 900
+  },
+  {
+   "say": "Dashboards are live charts of your system's health. Alerts watch those numbers, and automatically page the on-call person when one crosses a line.",
+   "post_ms": 1200,
+   "do": "js:setTimeout(SD, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "Think of a car dashboard: gauges you glance at, and warning lights that demand attention.",
+   "post_ms": 1100,
+   "do": "js:setTimeout(SD2, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "Without them, your customers find out first. Checkout fails, people give up, and the on-call engineer has no idea.",
+   "post_ms": 1200,
+   "do": "js:setTimeout(S1, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "So what do you chart? Start with the four golden signals. Latency, usually as p95: the time that ninety-five percent of requests beat. Traffic. Errors. And saturation: how full a resource is.",
+   "post_ms": 900,
+   "do": "js:setTimeout(S2, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "Then add business metrics: orders a minute, held versus paid, stock left. They show what customers are actually getting.",
+   "post_ms": 1200,
+   "do": "js:setTimeout(S3, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "An alert is a rule on one number: above a line, for some time. Say, errors above two percent for two minutes. The duration means a short blip doesn't wake anyone.",
+   "post_ms": 900,
+   "do": "js:setTimeout(S3b, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "And every alert links to a runbook: a written 'if this fires, do this', with an owner.",
+   "post_ms": 1200,
+   "do": "js:setTimeout(S3c, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "Good alerts give you three things. You hear about trouble before customers tell you.",
+   "post_ms": 600,
+   "do": "js:setTimeout(S5, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "You know what's wrong, not just that something is.",
+   "post_ms": 600,
+   "do": "js:setTimeout(S5b, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "And you know what to do, like which switch to flip.",
+   "post_ms": 1200,
+   "do": "js:setTimeout(S5c, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "Now game day at the pizza shop. At three forty PM, held orders keep climbing, but paid orders go flat. A held order has a slot reserved, waiting for payment.",
+   "post_ms": 900,
+   "do": "js:setTimeout(S6, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "If you only watch errors and latency, both look normal. Customers can't pay, and nobody knows.",
+   "post_ms": 900,
+   "do": "js:setTimeout(S6b, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "So you alert on the gap: held minus paid above fifty, for three minutes. It pages the on-call engineer.",
+   "post_ms": 900,
+   "do": "js:setTimeout(S6c, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "The runbook says: check Stripe's status. If it's down, pause orders.",
+   "post_ms": 1200,
+   "do": "js:setTimeout(S6d, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "Here's where it sits: every part reports its numbers to one dashboard, and the alerts watch them there.",
+   "post_ms": 1200,
+   "do": "js:setTimeout(S7, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "Two things to know. Too many alerts get ignored, so page only for what needs a person right now.",
+   "post_ms": 700,
+   "do": "js:setTimeout(S8, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "And every alert needs an owner and a runbook, or the page wakes someone who can't act.",
+   "post_ms": 1200,
+   "do": "js:setTimeout(S8b, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "In the interview, say: if errors pass two percent for two minutes, I turn on the waiting room.",
+   "post_ms": 600,
+   "do": "js:setTimeout(S9, 0)",
+   "settle_ms": 350
+  }
+ ]
+}

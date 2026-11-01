@@ -1,0 +1,217 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="color-scheme" content="light">
+<title>Load test and game day: lecture</title>
+<link rel="stylesheet" href="../lib/lecture.css">
+<script src="../lib/icons.js"></script>
+<script src="../lib/lecture.js"></script>
+<style>
+.row-hl { transition: fill .15s; }
+.score td, .score th { padding: 18px 30px; font-size: 40px; border-bottom: 3px solid var(--line); text-align: left; }
+.score th { color: var(--muted); font-size: 32px; }
+.score td.c { text-align: center; font-weight: 800; opacity: 0; transition: opacity .4s; }
+.score td.c.on { opacity: 1; }
+.score .ok { color: var(--good); } .score .no { color: var(--bad); }
+.score-box { position:absolute; left:260px; top:250px; width:1400px; background:#fff; border:3px solid var(--line); border-radius:28px; padding:30px 40px; }
+.score-box table { width:100%; border-collapse:collapse; }
+.score-note { position:absolute; left:0; right:0; top:680px; text-align:center; font-size:46px; font-weight:700; opacity:0; transition: opacity .5s; }
+.score-note.on { opacity:1; }
+</style>
+</head>
+<body>
+<script>
+// ---- page helpers: raw svg shapes, a line drawn over time, and one place to stop loops
+const NS = 'http://www.w3.org/2000/svg';
+const C = { acc: '#2456c7', good: '#1a7f37', bad: '#cf222e', warn: '#bf8700', muted: '#5f6368', line: '#e3e0d8' };
+function shape(d, tag, attrs, parent) { const e = document.createElementNS(NS, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); (parent || d.fx).append(e); return e; }
+function drawPath(d, pts, color, ms, width = 8) {
+  const p = shape(d, 'path', { d: 'M' + pts.map(q => q.join(',')).join(' L'), fill: 'none', stroke: color, 'stroke-width': width, 'stroke-linejoin': 'round', 'stroke-linecap': 'round' });
+  const L = p.getTotalLength(); p.style.strokeDasharray = L; p.style.strokeDashoffset = L;
+  p.animate([{ strokeDashoffset: L }, { strokeDashoffset: 0 }], { duration: ms, fill: 'forwards', easing: 'linear' });
+  return p;
+}
+let stops = [];
+function stopAll() { stops.forEach(f => f()); stops = []; }
+function loop(ms, fn) { const id = setInterval(fn, ms); stops.push(() => clearInterval(id)); }
+
+Title({ num: 20, name: 'Load test and game day', sub: 'Rehearse the spike before it happens', phase: 'Go-live', pills: ['Before every launch'] });
+
+// ---- definition: fake traffic at a test copy, plus a rehearsal
+const D = Define('def', {
+  html: 'Two practices before a launch. A <b>load test</b> fires fake traffic at <b>2 to 3x the peak</b> at a test copy, against a <b>pass bar</b>. A <b>game day</b> rehearses: flip switches, fake outages.',
+  extra: { label: 'Load-testing tools:', pills: ['k6', 'Locust'] },
+});
+const dd = D.d;
+dd.node('k6', 170, 330, 'gauge', 'Load test', 'fake users', { w: 210 });
+dd.node('stg', 760, 330, 'server', 'Test copy', 'staging', { w: 210, hidden: true });
+dd.link('k6', 'stg');
+dd.node('gd', 170, 720, 'flag', 'Game day', 'the team', { w: 210, hidden: true });
+dd.node('sw', 760, 620, 'power', 'Flip switches', '', { w: 230, hidden: true });
+dd.node('fo', 760, 840, 'x', 'Fake outage', 'Stripe errors', { w: 230, hidden: true, tone: 'bad' });
+window.SD = async () => {
+  D.show();
+  dd.pop('stg');
+  await sleep(500);
+  loop(160, () => dd.send('k6', 'stg', { dur: 700, r: 8, color: Math.random() < .2 ? 'warn' : 'acc' }));
+  await sleep(4000);
+  dd.popAll(['gd', 'sw', 'fo'], 600);
+  setTimeout(() => { dd.link('gd', 'sw'); dd.link('gd', 'fo'); }, 1500);
+};
+window.SD2 = () => D.more();
+
+// ---- the problem: found on sale day
+const P = Stage('prob', { caption: ['The problem', 'Sale day, 6 AM: checkout crawls'] });
+P.node('api', 330, 520, 'server', 'API', '', { w: 200, tone: 'warn' });
+const rows = [], RX = 760, RY = 300;
+shape(P, 'rect', { x: RX - 20, y: RY - 70, width: 620, height: 700, rx: 22, fill: '#fff', stroke: C.line, 'stroke-width': 4 }, P.bg);
+P.text(RX + 290, RY - 22, 'orders table, no index', { color: 'muted', size: 30 });
+for (let i = 0; i < 12; i++) rows.push(shape(P, 'rect', { x: RX, y: RY + i * 52, width: 580, height: 40, rx: 8, fill: '#eef0f4', class: 'row-hl' }, P.nodes));
+P.text(1640, 520, 'reads every row', { color: 'bad', size: 34, anchor: 'start' });
+P.node('oc', 330, 830, 'user', 'On-call', 'never practiced', { w: 220, hidden: true });
+let scanning = false;
+window.S1 = async () => {
+  stopAll(); P.show();
+  scanning = true;
+  let i = 0;
+  loop(140, () => { rows.forEach((r, k) => r.setAttribute('fill', k === i % 12 ? C.bad : k < i % 12 ? '#f6c9cd' : '#eef0f4')); i++; if (i % 12 === 0) P.tag('api', 'slow checkout', 'bad'); });
+};
+window.S1b = async () => {
+  P.cap('Then payments fail', 'And nobody has practiced pausing orders');
+  P.pop('oc'); P.link('oc', 'api', { dash: 1 });
+  await sleep(800);
+  for (let k = 0; k < 4; k++) { P.tag('oc', ['which switch?', 'where is it?'][k % 2], 'warn'); await sleep(1100); }
+};
+
+// ---- how it works: script, ramp, pass bar
+const M = Stage('how', { caption: ['A load test, step 1: a script', 'What real users do, run thousands of times'] });
+M.node('k6', 230, 420, 'gauge', 'k6', 'load tool', { w: 190 });
+M.node('stg', 980, 420, 'server', 'Staging', 'a test copy', { w: 210 });
+M.node('st', 1580, 420, 'card', 'Stripe', 'test mode', { w: 210 });
+M.link('k6', 'stg'); M.link('stg', 'st');
+const script = Panel(M, { x: 110, y: 570, w: 640, title: 'One fake user', items: ['open the deal page', 'add the TV to the cart', 'pay, in Stripe test mode'] });
+// ramp chart
+const GX = 900, GY = 960, GW = 900, GH = 380;
+const chart = shape(M, 'g', { opacity: 0, style: 'transition: opacity .5s' }, M.bg);
+shape(M, 'line', { x1: GX, y1: GY, x2: GX + GW, y2: GY, stroke: C.muted, 'stroke-width': 4 }, chart);
+shape(M, 'line', { x1: GX, y1: GY, x2: GX, y2: GY - GH, stroke: C.muted, 'stroke-width': 4 }, chart);
+const peakY = GY - GH / 3, topY = GY - GH * .95;
+shape(M, 'line', { x1: GX, y1: peakY, x2: GX + GW, y2: peakY, stroke: C.warn, 'stroke-width': 4, 'stroke-dasharray': '12 10' }, chart);
+shape(M, 'line', { x1: GX, y1: topY, x2: GX + GW, y2: topY, stroke: C.bad, 'stroke-width': 4, 'stroke-dasharray': '12 10' }, chart);
+const tPeak = shape(M, 'text', { x: GX + GW - 10, y: peakY - 12, fill: C.warn, style: 'font-size:26px;font-weight:700;text-anchor:end' }, chart); tPeak.textContent = 'expected peak';
+const tTop = shape(M, 'text', { x: GX + GW - 10, y: topY - 12, fill: C.bad, style: 'font-size:26px;font-weight:700;text-anchor:end' }, chart); tTop.textContent = '3x peak';
+const tAx = shape(M, 'text', { x: GX + GW / 2, y: GY + 40, fill: C.muted, style: 'font-size:26px;font-weight:700;text-anchor:middle' }, chart); tAx.textContent = 'fake users over time';
+window.S2 = async () => {
+  stopAll(); M.show();
+  for (let i = 0; i < 3; i++) { script.on(i); await sleep(600); }
+  loop(140, () => M.send('k6', 'stg', { dur: 700, r: 8 }));
+};
+window.S3 = async () => {
+  M.cap('Step 2: ramp it up', 'Past the expected peak, to 2 or 3x, at staging');
+  script.el.style.transition = 'opacity .5s'; script.el.style.opacity = 0;
+  chart.setAttribute('opacity', 1);
+  M.badge('stg', 'not real customers', 'acc', 'bottom');
+  drawPath(M, [[GX, GY], [GX + 150, GY - 20], [GX + 350, peakY + 20], [GX + 520, peakY - 60], [GX + 700, topY + 10], [GX + 880, topY + 10]], C.acc, 4200);
+};
+const pass = Panel(M, { x: 110, y: 570, w: 640, title: 'Pass bar, written first', items: ['0 TVs oversold', '0 double charges', 'p95 under 500 ms'] });
+pass.el.style.opacity = 0; pass.el.style.transition = 'opacity .5s';
+window.S3b = async () => {
+  M.cap('Step 3: a pass bar', 'Agreed before the test starts');
+  M.unbadge('stg');
+  pass.el.style.opacity = 1;
+  for (let i = 0; i < 3; i++) { await sleep(500); pass.on(i); }
+};
+window.S3c = async () => {
+  M.cap('p95: the slow tail', '95% of requests are faster than this');
+  pass.on(2);
+  // 20 response dots, 19 fast and 1 slow
+  for (let i = 0; i < 20; i++) {
+    const slow = i === 17;
+    shape(M, 'circle', { cx: 1000 + (i % 10) * 70, cy: 200 + Math.floor(i / 10) * 70 + 520, r: 0, fill: slow ? C.bad : C.good }).animate([{ r: 0 }, { r: 22 }], { duration: 300, delay: i * 70, fill: 'forwards' });
+  }
+  chart.setAttribute('opacity', 0); M.fx.querySelectorAll('path').forEach(q => q.style.opacity = 0);
+  await sleep(1800);
+  M.text(1315, 900, '19 of 20 faster than 500 ms', { color: 'good', size: 34 });
+};
+
+// ---- game day
+const G = Stage('gday', { caption: ['Game day: the rehearsal', 'The team practices on purpose'] });
+G.node('team', 300, 540, 'users', 'On-call team', '', { w: 230 });
+const gList = Panel(G, { x: 700, y: 260, w: 760, title: 'Game day checklist', items: ['Flip pause orders, then back', 'Turn on the waiting room', 'Fake Stripe errors: does the alert fire?', 'Time each response'] });
+G.node('sw', 1690, 420, 'stopwatch' in ICON ? 'stopwatch' : 'timer', 'Stopwatch', '', { w: 210 });
+const gT = G.text(1690, 600, '0:00', { size: 64 });
+window.S4 = async () => {
+  stopAll(); G.show();
+  let s = 0; loop(100, () => { s++; gT.textContent = Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); });
+  for (let i = 0; i < 4; i++) { await sleep(i ? 1300 : 300); gList.on(i); G.send('team', 'sw', { dur: 700, color: 'good' }); }
+};
+
+// ---- what each finds
+const U = Cards('uses', {
+  head: 'What each one finds', cols: 2, items: [
+    { icon: 'gauge', title: 'The load test', text: 'Slow queries, missing indexes, too few copies, connection limits.' },
+    { icon: 'flag', color: 'warn', title: 'The game day', text: 'Switches that don\'t work, alerts that don\'t fire, steps nobody knows.' },
+  ],
+});
+window.S5 = () => { stopAll(); U.show(); setTimeout(() => U.reveal(0), 300); };
+window.S5b = () => U.reveal(1);
+
+// ---- scenario: doorbuster sale, two days before
+const K = Counters('count', {
+  head: 'Two days before a doorbuster sale', parts: [
+    { n: 120000, label: 'fake visitors' }, { op: '→' }, { n: 1000, label: 'try to buy one TV' }, { op: '→' }, { n: 50, label: 'TVs in stock', cls: 'good' },
+  ],
+});
+window.S6 = async () => { stopAll(); K.show(); await sleep(400); K.run(600, 150); };
+const SB = document.createElement('section'); SB.id = 'score'; SB.className = 'scene'; document.body.append(SB);
+SB.innerHTML = `<h2 class="head" style="position:absolute;left:110px;top:60px;margin:0;font-size:60px">The pass bar, run by run</h2>
+<div class="score-box"><table class="score">
+<tr><th>Pass bar</th><th style="text-align:center">Run 1</th><th style="text-align:center">Run 2</th></tr>
+<tr><td>TVs sold: exactly 50</td><td class="c ok r1">✓ 50</td><td class="c ok r2">✓ 50</td></tr>
+<tr><td>Double charges: 0</td><td class="c ok r1">✓ 0</td><td class="c ok r2">✓ 0</td></tr>
+<tr><td>p95 under 500 ms</td><td class="c no r1">✕ too slow</td><td class="c ok r2">✓ pass</td></tr>
+</table></div><div class="score-note"></div>`;
+const note = SB.querySelector('.score-note');
+window.S6b = async () => {
+  show('score');
+  for (const c of SB.querySelectorAll('.r1')) { await sleep(500); c.classList.add('on'); }
+  await sleep(500); note.innerHTML = '<span style="color:var(--bad)">Run 1 fails: a missing index</span>'; note.classList.add('on');
+};
+window.S6c = async () => {
+  note.classList.remove('on');
+  for (const c of SB.querySelectorAll('.r2')) { await sleep(500); c.classList.add('on'); }
+  await sleep(400); note.innerHTML = '<span style="color:var(--good)">Add the index, rerun: pass. Found two days early.</span>'; note.classList.add('on');
+};
+window.S6d = async () => {
+  G.show(); G.cap('Then the game day', 'Every switch flipped, Stripe errors faked, responses timed');
+  stopAll();
+  let s = 0; loop(100, () => { s++; gT.textContent = Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); });
+  G.badge('team', 'practiced', 'good');
+};
+
+// ---- where it fits
+const Y = System('sys', { highlight: ['cdn', 'lb', 'api', 'db', 'pay'], caption: ['Where it fits', 'Aimed at a full copy of the system'], labels: { pay: ['Stripe', 'test mode'], api: ['API', 'staging copy'] } });
+Y.node('k6', 150, 300, 'gauge', 'k6', 'fake users', { w: 180, tone: 'hl' });
+Y.link('k6', 'cdn', { tone: 'acc' });
+window.S7 = async () => {
+  stopAll(); Y.show(); await sleep(500);
+  for (let i = 0; i < 3; i++) { Y.flow(['k6', 'cdn', 'lb', 'api', 'db'], { dur: 380 }); await sleep(450); }
+  for (let i = 0; i < 2; i++) { await Y.flow(['k6', 'cdn', 'lb', 'api', 'pay'], { dur: 380, color: 'good' }); }
+};
+
+// ---- trade-offs
+const T = Cards('trade', {
+  head: 'Two things to know', cols: 2, items: [
+    { icon: 'server', color: 'warn', title: 'Staging must match', text: 'Size the test copy like production, or the numbers lie.' },
+    { icon: 'users', color: 'bad', title: 'Fake traffic is a guess', text: 'Model what real users do: most browse, a few buy.' },
+  ],
+});
+window.S8 = () => { stopAll(); T.show(); setTimeout(() => T.reveal(0), 300); };
+window.S8b = () => T.reveal(1);
+
+const Z = Say('say', 'Pass means 0 oversold, 0 double charges, and p95 under 500 ms.');
+window.S9 = () => Z.show();
+</script>
+</body>
+</html>

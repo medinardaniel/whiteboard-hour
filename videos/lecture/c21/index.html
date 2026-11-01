@@ -1,0 +1,197 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="color-scheme" content="light">
+<title>Safe deploys: lecture</title>
+<link rel="stylesheet" href="../lib/lecture.css">
+<script src="../lib/icons.js"></script>
+<script src="../lib/lecture.js"></script>
+<style>
+.dot { transition: fill .4s; }
+.day rect { transition: fill .4s; }
+</style>
+</head>
+<body>
+<script>
+// ---- page helpers: raw svg shapes, a grid of customers, and one place to stop loops
+const NS = 'http://www.w3.org/2000/svg';
+const C = { acc: '#2456c7', good: '#1a7f37', bad: '#cf222e', warn: '#bf8700', muted: '#5f6368', line: '#e3e0d8', soft: '#c9d6f2' };
+function shape(d, tag, attrs, parent) { const e = document.createElementNS(NS, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); (parent || d.fx).append(e); return e; }
+let stops = [];
+function stopAll() { stops.forEach(f => f()); stops = []; }
+function loop(ms, fn) { const id = setInterval(fn, ms); stops.push(() => clearInterval(id)); }
+function people(d, x0, y0, cols, rows, gap = 74) {
+  const out = [];
+  for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) out.push(shape(d, 'circle', { cx: x0 + c * gap, cy: y0 + r * gap, r: 26, fill: C.soft, class: 'dot' }, d.nodes));
+  return out;
+}
+// send one request through the load balancer; share = fraction that goes to the new version
+function split(d, from, lb, a, b, share, colorB = 'acc') {
+  return async () => { await d.send(from, lb, { dur: 380 }); const nb = Math.random() < share; d.send(lb, nb ? b : a, { dur: 450, color: nb ? colorB : 'good' }); };
+}
+
+Title({ num: 21, name: 'Safe deploys', sub: 'A few users first, a way back, and a freeze', phase: 'Go-live', pills: ['Any release near the event'] });
+
+// ---- definition: canary split
+const D = Define('def', {
+  html: 'A way of <b>releasing new code</b>: send it to <b>a few users first</b>, keep a <b>tested way back</b>, and <b>stop releasing</b> around the event.',
+  extra: { label: 'Three tools:', pills: ['Canary', 'Rollback', 'Code freeze'] },
+});
+const dd = D.d;
+dd.node('u', 130, 540, 'users', 'Users', '', { w: 160 });
+dd.node('lb', 420, 540, 'split', 'Load balancer', '', { w: 210 });
+dd.node('v1', 790, 360, 'server', 'Version 1', 'old: 95%', { w: 210 });
+dd.node('v2', 790, 740, 'server', 'Version 2', 'new: 5%', { w: 210, hidden: true, tone: 'warn' });
+dd.link('u', 'lb'); dd.link('lb', 'v1'); dd.link('lb', 'v2');
+window.SD = async () => {
+  D.show();
+  await sleep(900); dd.pop('v2');
+  await sleep(600);
+  loop(420, split(dd, 'u', 'lb', 'v1', 'v2', .1, 'warn'));
+  await sleep(5200);
+  dd.tone('v2', 'bad'); dd.badge('v2', 'errors', 'bad', 'bottom');
+  await sleep(1500);
+  stopAll(); dd.tone('v2', 'muted'); dd.unbadge('v2'); dd.badge('v1', 'rolled back', 'good', 'top'); dd.linkTone('lb-v2', 'dim');
+  loop(420, split(dd, 'u', 'lb', 'v1', 'v2', 0));
+};
+window.SD2 = () => D.more();
+
+// ---- the problem: 100% at once
+const P = Stage('prob', { caption: ['The problem', 'A release goes to every copy at once'] });
+P.node('u', 220, 560, 'users', 'Customers', '', { w: 180 });
+P.node('lb', 640, 560, 'split', 'Load balancer', '', { w: 210 });
+['1', '2', '3', '4'].forEach((n, i) => P.node('c' + n, 1180, 260 + i * 200, 'server', 'Copy ' + n, 'version 1', { w: 200 }));
+['c1', 'c2', 'c3', 'c4'].forEach(k => P.link('lb', k));
+P.node('rel', 1650, 560, 'pipeline', 'New release', 'version 2', { w: 220, tone: 'warn' });
+let pi = 0;
+window.S1 = async () => {
+  stopAll(); P.show();
+  loop(320, async () => { await P.send('u', 'lb', { dur: 350 }); P.send('lb', 'c' + (1 + pi++ % 4), { dur: 400, color: 'good' }); });
+  await sleep(1300);
+  await Promise.all(['c1', 'c2', 'c3', 'c4'].map(k => P.send('rel', k, { dur: 800, color: 'warn', r: 14 })));
+  ['c1', 'c2', 'c3', 'c4'].forEach(k => { P.tone(k, 'bad'); P.rename(k, null, 'version 2'); });
+};
+window.S1b = async () => {
+  P.cap('Everyone is hit at once', 'Until someone notices and undoes it');
+  for (let i = 0; i < 5; i++) { P.tag('u', i % 2 ? 'error' : 'booking broken', 'bad'); await sleep(1000); }
+};
+
+// ---- how it works: canary, widen, rollback, freeze
+const M = Stage('how', { caption: ['Canary: a few users first', 'About 5% of traffic gets the new version'] });
+M.node('u', 200, 540, 'users', 'Users', '', { w: 170 });
+M.node('lb', 620, 540, 'split', 'Load balancer', '', { w: 220 });
+M.node('v1', 1180, 340, 'server', 'Version 1', 'old', { w: 220 });
+M.node('v2', 1180, 760, 'server', 'Version 2', 'canary', { w: 220, hidden: true, tone: 'warn' });
+M.link('u', 'lb'); M.link('lb', 'v1'); M.link('lb', 'v2');
+const e1 = M.text(1330, 352, '', { size: 34, anchor: 'start', color: 'good' });
+const e2 = M.text(1330, 772, '', { size: 34, anchor: 'start', color: 'good' });
+const pct = M.text(900, 700, '', { size: 44, color: 'warn' });
+M.node('rel', 620, 860, 'pipeline', 'Releases', '', { w: 220, hidden: true });
+let share = .05;
+window.S2 = async () => {
+  stopAll(); M.show();
+  await sleep(300); M.pop('v2'); pct.textContent = '5%';
+  loop(300, async () => { await M.send('u', 'lb', { dur: 330 }); const nb = Math.random() < share; M.send('lb', nb ? 'v2' : 'v1', { dur: 420, color: nb ? 'warn' : 'good' }); });
+  await sleep(1500);
+  e1.textContent = 'errors 0.1%'; e2.textContent = 'errors 0.1%';
+};
+window.S3 = async () => {
+  M.cap('Watch, then widen', 'Same error rate as the old version? Send more');
+  for (const p of [.25, .5, 1]) { share = p; pct.textContent = Math.round(p * 100) + '%'; await sleep(1500); }
+  M.dim(['v1']); M.linkTone('lb-v1', 'dim'); M.tone('v2', 'good');
+};
+window.S3b = async () => {
+  M.cap('Rollback: one tested step back', 'The canary is worse? Undo it');
+  M.dim(['v1'], false); M.linkTone('lb-v1', ''); M.tone('v2', 'warn'); share = .05; pct.textContent = '5%';
+  await sleep(500);
+  e2.textContent = 'errors 4%'; e2.setAttribute('fill', C.bad); M.tone('v2', 'bad');
+  await sleep(1300);
+  M.badge('lb', 'roll back', 'bad', 'top');
+  share = 0; pct.textContent = '0%'; M.linkTone('lb-v2', 'dim'); M.tone('v2', 'muted');
+  await sleep(600); M.unbadge('lb'); M.badge('v1', '100% back on version 1', 'good', 'top');
+};
+window.S3c = async () => {
+  M.cap('Code freeze', 'Around the event, nothing ships');
+  M.unbadge('v1'); M.pop('rel'); M.link('rel', 'lb', { dash: 1 });
+  await sleep(700);
+  M.tone('rel', 'muted'); M.badge('rel', 'frozen until Monday', 'acc', 'bottom');
+  for (let i = 0; i < 3; i++) { M.tag('rel', 'nothing ships', 'acc'); await sleep(1300); }
+};
+
+// ---- what each tool limits
+const U = Cards('uses', {
+  head: 'Most outages come from changes', items: [
+    { icon: 'users', color: 'warn', title: 'Canary', text: 'Limits who sees a bad release.' },
+    { icon: 'retry', color: 'good', title: 'Rollback', text: 'Limits how long it lasts.' },
+    { icon: 'snow', title: 'Freeze', text: 'Removes the risk during the event.' },
+  ],
+});
+window.S5 = () => { stopAll(); U.show(); setTimeout(() => U.reveal(0), 300); };
+window.S5b = () => U.reveal(1);
+window.S5c = () => U.reveal(2);
+
+// ---- scenario: tire shop, Wednesday before a snowy weekend
+const S = Stage('scen', { caption: ['', ''] });
+S.text(480, 190, 'Fix to 100% at once', { color: 'bad', size: 44 });
+S.text(1440, 190, 'Fix to a 5% canary', { color: 'good', size: 44 });
+shape(S, 'line', { x1: 960, y1: 240, x2: 960, y2: 680, stroke: C.line, 'stroke-width': 4 }, S.bg);
+const L = people(S, 150, 300, 10, 2), R = people(S, 1110, 300, 10, 2);
+const lNote = S.text(480, 520, '', { size: 36, color: 'bad' });
+const rNote = S.text(1440, 520, '', { size: 36, color: 'muted' });
+const rErr = S.text(1440, 600, '', { size: 36, color: 'bad' });
+// calendar: Wed .. Mon
+const days = ['Wed', 'Thu', 'Fri', 'Sat', 'Sun', 'Mon'], DX = 290, DW = 230;
+const dayG = shape(S, 'g', { opacity: 0, style: 'transition: opacity .5s' }, S.bg);
+const dayR = days.map((n, i) => {
+  const g = shape(S, 'g', { class: 'day' }, dayG);
+  const r = shape(S, 'rect', { x: DX + i * (DW + 14), y: 770, width: DW, height: 110, rx: 16, fill: '#fff', stroke: C.line, 'stroke-width': 3 }, g);
+  const t = shape(S, 'text', { x: DX + i * (DW + 14) + DW / 2, y: 815, fill: '#1d1d1f', style: 'font-size:30px;font-weight:800;text-anchor:middle' }, g); t.textContent = n;
+  const s = shape(S, 'text', { x: DX + i * (DW + 14) + DW / 2, y: 858, fill: C.muted, style: 'font-size:24px;font-weight:700;text-anchor:middle' }, g); s.textContent = '';
+  return { r, s };
+});
+S.text(960, 1000, 'Tire shop, Wednesday before a snowy weekend: a bug fix ships', { color: 'muted', size: 32, weight: 600 });
+window.S6 = async () => { stopAll(); S.show(); dayG.setAttribute('opacity', 1); dayR[0].r.setAttribute('fill', '#e8eefb'); dayR[0].s.textContent = 'fix ships'; };
+window.S6b = async () => {
+  for (let i = 0; i < 20; i++) { L[i].setAttribute('fill', C.bad); await sleep(70); }
+  lNote.textContent = 'booking broken for everyone';
+};
+window.S6c = async () => {
+  R.forEach(c => c.setAttribute('fill', C.good));
+  await sleep(300);
+  R[13].setAttribute('fill', C.warn); rNote.textContent = '1 in 20 gets the new version';
+  await sleep(1400);
+  R[13].setAttribute('fill', C.bad); rErr.textContent = 'their errors: 0.1% → 4%';
+};
+window.S6d = async () => {
+  rErr.textContent = ''; R[13].setAttribute('fill', C.good); rNote.textContent = 'one-click rollback'; rNote.setAttribute('fill', C.good);
+  dayR[0].s.textContent = 'rolled back';
+  await sleep(1600);
+  dayR[1].r.setAttribute('fill', '#eef7f0'); dayR[1].s.textContent = 'proper fix';
+  await sleep(1200);
+  for (let i = 2; i < 5; i++) { dayR[i].r.setAttribute('fill', '#dfe7f7'); dayR[i].s.textContent = 'frozen'; await sleep(350); }
+  dayR[5].s.textContent = 'releases resume';
+};
+
+// ---- where it fits
+const Y = System('sys', { highlight: ['lb', 'api'], labels: { api: ['API', 'v1, plus 5% v2'] } });
+window.S7 = async () => {
+  stopAll(); Y.show(); await sleep(600);
+  for (let i = 0; i < 4; i++) { Y.flow(['browser', 'cdn', 'lb', 'api'], { dur: 420, color: i === 3 ? 'warn' : 'acc' }); await sleep(800); }
+};
+
+// ---- trade-offs
+const T = Cards('trade', {
+  head: 'Two other styles you\'ll hear', cols: 2, items: [
+    { icon: 'retry', color: 'warn', title: 'Rolling deploy', text: 'Replaces copies a few at a time. It can cut off work in progress.' },
+    { icon: 'split', color: 'acc', title: 'Blue-green', text: 'Old and new side by side. All traffic switches at once, and back just as fast.' },
+  ],
+});
+window.S8 = () => { stopAll(); T.show(); setTimeout(() => T.reveal(0), 300); };
+window.S8b = () => T.reveal(1);
+
+const Z = Say('say', 'Nothing ships during the window.');
+window.S9 = () => Z.show();
+</script>
+</body>
+</html>

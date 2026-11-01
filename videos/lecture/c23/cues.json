@@ -1,0 +1,137 @@
+{
+ "target": "index.html",
+ "viewport": [
+  1920,
+  1080
+ ],
+ "voice": "en-US-AndrewMultilingualNeural",
+ "rate": "+6%",
+ "pronounce": {
+  "API": "A P I",
+  "HTTPS": "H T T P S",
+  "PCI": "P C I"
+ },
+ "load_ms": 1200,
+ "gap_ms": 400,
+ "tail_ms": 1500,
+ "cues": [
+  {
+   "say": "Component twenty-three: security basics.",
+   "post_ms": 900
+  },
+  {
+   "say": "Security basics are five habits you can name in one breath. HTTPS everywhere. Secrets in a vault. Let the payment provider handle cards. Least privilege. And keep little personal data.",
+   "post_ms": 1200,
+   "do": "js:setTimeout(SD, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "In a design interview, that takes about twenty seconds. Then you go back to the design.",
+   "post_ms": 1100,
+   "do": "js:setTimeout(SD2, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "Why do they matter? Small shops get hurt by simple mistakes: a password left in the code, card numbers in their own database, or a worker that can read everything.",
+   "post_ms": 700,
+   "do": "js:setTimeout(S1, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "One attacker finds one hole, and everything behind it is exposed.",
+   "post_ms": 1200,
+   "do": "js:setTimeout(S1b, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "First, HTTPS everywhere. It encrypts traffic between the browser and your servers, so someone on the same cafÃ© Wi-Fi sees only noise.",
+   "post_ms": 900,
+   "do": "js:setTimeout(S2, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "Second, secrets in a vault. The Stripe key and the database password live in a secrets manager, not in the code. The API fetches them when it starts.",
+   "post_ms": 900,
+   "do": "js:setTimeout(S3, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "Third, hosted checkout. Customers type their card on Stripe's page, so card numbers never touch your servers. Stripe just tells you: order forty-two is paid.",
+   "post_ms": 900,
+   "do": "js:setTimeout(S3b, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "Fourth, least privilege: each part gets only what it needs. The text worker can read the queue, but not the database.",
+   "post_ms": 900,
+   "do": "js:setTimeout(S3c, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "Fifth, keep little personal data. A name and a phone number are enough. What you never store can't leak.",
+   "post_ms": 1200,
+   "do": "js:setTimeout(S3d, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "So in the interview, name these five, quickly and plainly.",
+   "post_ms": 600,
+   "do": "js:setTimeout(S5, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "And skip the deep cuts, like cipher suites and key lengths, unless you're asked.",
+   "post_ms": 1200,
+   "do": "js:setTimeout(S5b, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "Here's how it plays out. The interviewer asks: what about security?",
+   "post_ms": 800,
+   "do": "js:setTimeout(S6, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "The weak answer spends ten minutes on encryption algorithms, and there's no time left for go-live.",
+   "post_ms": 900,
+   "do": "js:setTimeout(S6b, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "The strong answer names the five, with your design's details, in about twenty seconds.",
+   "post_ms": 800,
+   "do": "js:setTimeout(S6c, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "Then you move on to go-live, with time to spare.",
+   "post_ms": 1200,
+   "do": "js:setTimeout(S6d, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "Here's where it sits: across the whole system. HTTPS at the front, keys from a vault, cards at Stripe, and narrow access for each part.",
+   "post_ms": 1200,
+   "do": "js:setTimeout(S7, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "Two words to keep straight. Authentication is proving who you are, like a login.",
+   "post_ms": 700,
+   "do": "js:setTimeout(S8, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "Authorization is what you're allowed to do once you're in.",
+   "post_ms": 1200,
+   "do": "js:setTimeout(S8b, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "In the interview, say: HTTPS everywhere, secrets in a vault, no card data on our servers, and each service gets only what it needs.",
+   "post_ms": 600,
+   "do": "js:setTimeout(S9, 0)",
+   "settle_ms": 350
+  }
+ ]
+}

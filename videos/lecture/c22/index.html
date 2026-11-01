@@ -1,0 +1,233 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="color-scheme" content="light">
+<title>Dashboards and alerts: lecture</title>
+<link rel="stylesheet" href="../lib/lecture.css">
+<script src="../lib/icons.js"></script>
+<script src="../lib/lecture.js"></script>
+<style>
+.ch { transition: opacity .5s; }
+.knob { transition: transform .35s cubic-bezier(.4,0,.2,1); }
+.track { transition: fill .35s; }
+</style>
+</head>
+<body>
+<script>
+// ---- page helpers: raw svg shapes, live line charts, a switch, and one place to stop loops
+const NS = 'http://www.w3.org/2000/svg';
+const C = { acc: '#2456c7', good: '#1a7f37', bad: '#cf222e', warn: '#bf8700', muted: '#5f6368', line: '#e3e0d8', off: '#c4c8cf' };
+function shape(d, tag, attrs, parent) { const e = document.createElementNS(NS, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); (parent || d.fx).append(e); return e; }
+let stops = [];
+function stopAll() { stops.forEach(f => f()); stops = []; }
+function loop(ms, fn) { const id = setInterval(fn, ms); stops.push(() => clearInterval(id)); }
+// a chart card at (x, y) of size w x h; series values are 0..1 (bottom..top)
+function chart(d, x, y, w, h, title, opts = {}) {
+  const g = shape(d, 'g', { class: 'ch' }, d.nodes);
+  shape(d, 'rect', { x, y, width: w, height: h, rx: 18, fill: '#fff', stroke: C.line, 'stroke-width': 3 }, g);
+  const t = shape(d, 'text', { x: x + 22, y: y + 40, fill: '#1d1d1f', style: `font-size:${opts.size || 28}px;font-weight:700` }, g); t.textContent = title;
+  const X0 = x + 22, X1 = x + w - 22, Y0 = y + h - 22, Y1 = y + 62, N = opts.n || 40;
+  const yv = v => Y0 - (Y0 - Y1) * Math.max(0, Math.min(1, v));
+  const S = {};
+  return {
+    g, X0, X1, Y0, Y1, yv,
+    series(name, color, width = 6) { S[name] = { pts: [], p: shape(d, 'path', { fill: 'none', stroke: color, 'stroke-width': width, 'stroke-linejoin': 'round' }, g) }; return this; },
+    push(name, v) {
+      const s = S[name]; s.pts.push(v); if (s.pts.length > N) s.pts.shift();
+      s.p.setAttribute('d', 'M' + s.pts.map((q, i) => `${X0 + (X1 - X0) * i / (N - 1)},${yv(q)}`).join(' L'));
+    },
+    last(name) { const p = S[name].pts; return p[p.length - 1]; },
+    line(v, label, color = C.bad) {
+      shape(d, 'line', { x1: X0, x2: X1, y1: yv(v), y2: yv(v), stroke: color, 'stroke-width': 3, 'stroke-dasharray': '10 8' }, g);
+      if (label) { const l = shape(d, 'text', { x: X1, y: yv(v) - 10, fill: color, style: 'font-size:22px;font-weight:700;text-anchor:end' }, g); l.textContent = label; }
+    },
+    note(text, color = C.good) {
+      if (!this._n) this._n = shape(d, 'text', { x: x + w - 22, y: y + 40, style: 'font-size:24px;font-weight:800;text-anchor:end' }, g);
+      this._n.textContent = text; this._n.setAttribute('fill', color);
+    },
+  };
+}
+const jit = (v, a = .04) => v + (Math.random() - .5) * a;
+function toggle(d, x, y, label, onColor = C.bad) {
+  const g = shape(d, 'g', {}, d.nodes);
+  const tr = shape(d, 'rect', { x: x - 50, y: y - 27, width: 100, height: 54, rx: 27, fill: C.off, class: 'track' }, g);
+  const kn = shape(d, 'circle', { cx: x - 23, cy: y, r: 21, fill: '#fff', class: 'knob' }, g);
+  const t = shape(d, 'text', { x: x + 74, y: y + 10, style: 'font-size:30px;font-weight:700;text-anchor:start', fill: '#1d1d1f' }, g); t.textContent = label;
+  return { set(on) { tr.setAttribute('fill', on ? onColor : C.off); kn.style.transform = on ? 'translateX(46px)' : 'none'; }, g };
+}
+
+Title({ num: 22, name: 'Dashboards and alerts', sub: 'See trouble, and get woken up for it', phase: 'Go-live', pills: ['Launch day', 'Every day after'] });
+
+// ---- definition: charts, a line, a page
+const D = Define('def', {
+  html: '<b>Live charts</b> of the system\'s health, plus <b>automatic pages</b> to the on-call person when a number <b>crosses a line</b>.',
+  extra: { label: 'Like a car dashboard:', pills: ['Gauges', 'Warning lights', 'A phone that rings'] },
+});
+const dd = D.d;
+const dA = chart(dd, 40, 260, 560, 250, 'Orders a minute').series('o', C.acc);
+const dB = chart(dd, 40, 560, 560, 250, 'Errors').series('e', C.bad);
+dB.line(.6, 'alert line');
+dd.node('bell', 790, 420, 'bell', 'Alert', '', { w: 190 });
+dd.node('ph', 790, 720, 'phone', 'On-call', '', { w: 190 });
+dd.link('bell', 'ph');
+let dt = 0;
+for (let i = 0; i < 40; i++) { dA.push('o', jit(.55, .1)); dB.push('e', jit(.15)); }
+window.SD = async () => {
+  D.show();
+  loop(150, () => { dt++; dA.push('o', jit(dt > 25 ? .35 : .55, .1)); dB.push('e', jit(dt > 20 ? Math.min(.8, .15 + (dt - 20) * .04) : .15)); });
+  await sleep(5200);
+  dd.tone('bell', 'bad'); dd.ring('bell', 900, 'bad');
+  await sleep(900);
+  await dd.send('bell', 'ph', { dur: 700, color: 'bad' });
+  dd.tone('ph', 'bad'); dd.badge('ph', 'paged', 'bad', 'bottom');
+};
+window.SD2 = () => D.more();
+
+// ---- the problem: nobody is watching
+const P = Stage('prob', { caption: ['The problem', 'No alerts: customers find out first'] });
+P.node('u', 260, 520, 'users', 'Customers', '', { w: 200 });
+P.node('api', 860, 520, 'server', 'Your site', 'checkout failing', { w: 230, tone: 'bad' });
+P.node('oc', 1520, 520, 'user', 'On-call', 'no idea', { w: 210, tone: 'muted' });
+P.link('u', 'api'); P.link('api', 'oc', { dash: 1 });
+const pClock = P.text(960, 860, '', { size: 70, color: 'bad' });
+window.S1 = async () => {
+  stopAll(); P.show();
+  let m = 0;
+  loop(300, () => { m++; pClock.textContent = m + " min, and on-call doesn't know"; if (m >= 20) stopAll(); });
+  for (let i = 0; i < 4; i++) { P.send('u', 'api', { dur: 500 }); P.tag('u', ['can\'t pay', 'site broken?', 'trying again', 'giving up'][i], 'bad'); await sleep(1200); }
+  P.tag('oc', 'zzz', 'muted');
+};
+
+// ---- how it works: golden signals + business metrics
+const M = Stage('how', { caption: ['The four golden signals', 'Every system has these'] });
+const sig = [['Latency (p95)', C.acc, .35], ['Traffic', C.acc, .55], ['Errors', C.bad, .12], ['Saturation (how full)', C.warn, .45]];
+const G = sig.map(([t, c, v], i) => { const ch = chart(M, 110 + (i % 2) * 450, 250 + Math.floor(i / 2) * 330, 420, 300, t, { size: 26 }).series('s', c); ch.g.style.opacity = 0; for (let k = 0; k < 40; k++) ch.push('s', jit(v, .08)); return ch; });
+const biz = [['Orders a minute', C.good, .6], ['Held vs paid', C.acc, .5], ['Stock left', C.warn, .7]];
+const B = biz.map(([t, c, v], i) => { const ch = chart(M, 1110, 250 + i * 220, 700, 200, t, { size: 26 }).series('s', c); ch.g.style.opacity = 0; for (let k = 0; k < 40; k++) ch.push('s', jit(v, .08)); return ch; });
+const bizHead = M.text(1460, 230, 'Business metrics', { color: 'good', size: 30 }); bizHead.style.opacity = 0; bizHead.style.transition = 'opacity .5s';
+function live(list, vals) { loop(160, () => list.forEach((ch, i) => ch.push('s', jit(vals[i], .08)))); }
+window.S2 = async () => {
+  stopAll(); M.show();
+  for (let i = 0; i < 4; i++) { G[i].g.style.opacity = 1; await sleep(500); }
+  live(G, sig.map(s => s[2]));
+};
+window.S3 = async () => {
+  M.cap('Plus business metrics', 'What customers are actually getting');
+  bizHead.style.opacity = 1;
+  for (let i = 0; i < 3; i++) { B[i].g.style.opacity = 1; await sleep(500); }
+  live(B, biz.map(s => s[2]));
+};
+
+// ---- alert rule + runbook
+const A = Stage('alert', { caption: ['An alert: a line, and a duration', 'Above 2% errors for 2 minutes'] });
+const aCh = chart(A, 110, 250, 1080, 560, 'Errors, last 10 minutes', { n: 60 }).series('e', C.bad, 7);
+aCh.line(.5, '2%');
+for (let k = 0; k < 60; k++) aCh.push('e', jit(.2, .06));
+A.node('bell', 1440, 400, 'bell', 'Alert', 'for 2 min', { w: 210 });
+A.node('ph', 1720, 400, 'phone', 'On-call', '', { w: 190 });
+A.link('bell', 'ph');
+const runbook = Panel(A, { x: 1290, y: 580, w: 540, title: 'Runbook: errors > 2%', items: ['Check the error logs', 'Turn on the waiting room', 'Owner: on-call engineer'] });
+runbook.el.style.opacity = 0; runbook.el.style.transition = 'opacity .5s';
+let at = 0;
+window.S3b = async () => {
+  stopAll(); A.show();
+  loop(110, () => {
+    at++;
+    const v = at > 8 && at < 14 ? .62 : at >= 30 ? .7 : .2;
+    aCh.push('e', jit(v, .06));
+    if (at === 11) A.tag('bell', 'a blip: no page', 'muted', -110);
+  });
+  await sleep(3300);
+  A.ring('bell', 1800, 'bad');
+  await sleep(1800);
+  A.tone('bell', 'bad'); await A.send('bell', 'ph', { dur: 600, color: 'bad' });
+  A.tone('ph', 'bad'); A.badge('ph', 'paged', 'bad', 'top');
+};
+window.S3c = async () => {
+  A.cap('Every alert has a runbook', 'If this fires, do this. With an owner.');
+  runbook.el.style.opacity = 1;
+  for (let i = 0; i < 3; i++) { await sleep(600); runbook.on(i); }
+};
+
+// ---- what it's for
+const U = Cards('uses', {
+  head: 'What good dashboards and alerts give you', items: [
+    { icon: 'bell', color: 'bad', title: 'You hear first', text: 'Before customers tell you.' },
+    { icon: 'target', title: 'What\'s wrong', text: 'Not just that something is.' },
+    { icon: 'power', color: 'good', title: 'What to do', text: 'Which switch to flip.' },
+  ],
+});
+window.S5 = () => { stopAll(); U.show(); setTimeout(() => U.reveal(0), 300); };
+window.S5b = () => U.reveal(1);
+window.S5c = () => U.reveal(2);
+
+// ---- scenario: game day 3:40 PM, held climbs, paid flat
+const S = Stage('scen', { caption: ['Game day, 3:40 PM', 'Pizza shop'] });
+const hp = chart(S, 110, 250, 1100, 600, 'Held vs paid orders', { n: 70 }).series('h', C.warn, 7).series('p', C.good, 7);
+const sErr = chart(S, 1290, 250, 520, 280, 'Errors', { size: 26 }).series('s', C.bad);
+const sLat = chart(S, 1290, 570, 520, 280, 'Latency (p95)', { size: 26 }).series('s', C.acc);
+for (let k = 0; k < 70; k++) { const v = jit(.3, .05); hp.push('h', v); hp.push('p', v - .03); }
+for (let k = 0; k < 40; k++) { sErr.push('s', jit(.15, .06)); sLat.push('s', jit(.3, .06)); }
+const leg1 = S.text(160, 900, 'held', { color: 'warn', size: 30, anchor: 'start' });
+const leg2 = S.text(260, 900, 'paid', { color: 'good', size: 30, anchor: 'start' });
+let st = 0, gapShade = null;
+function scenLoop() {
+  loop(120, () => {
+    st++;
+    const h = Math.min(.92, .3 + Math.max(0, st - 6) * .012), p = st > 6 ? .27 : .27;
+    hp.push('h', jit(h, .02)); hp.push('p', jit(p, .02));
+    sErr.push('s', jit(.15, .06)); sLat.push('s', jit(.3, .06));
+  });
+}
+window.S6 = () => { stopAll(); S.show(); scenLoop(); };
+window.S6b = async () => {
+  sErr.note('looks normal', C.good); await sleep(500); sLat.note('looks normal', C.good);
+  await sleep(1200);
+  hp.note('customers can\'t pay', C.bad);
+};
+window.S6c = async () => {
+  S.cap('Alert: held minus paid above 50', 'For 3 minutes: page on-call');
+  const x = hp.X1 - 10;
+  gapShade = shape(S, 'line', { x1: x, x2: x, y1: hp.yv(hp.last('p')), y2: hp.yv(hp.last('h')), stroke: C.bad, 'stroke-width': 6 });
+  S.text(x - 20, (hp.yv(hp.last('p')) + hp.yv(hp.last('h'))) / 2, 'gap > 50', { color: 'bad', size: 34, anchor: 'end' });
+  S.node('ph', 1550, 960, 'phone', 'On-call paged', '', { w: 260, h: 110, tone: 'bad' });
+  S.badge('ph', 'alert fired', 'bad', 'top');
+};
+const rb = Panel(S, { x: 1290, y: 250, w: 520, title: 'Runbook: held vs paid', items: ['Check Stripe\'s status page', 'Stripe down? Pause orders'] });
+rb.el.style.opacity = 0; rb.el.style.transition = 'opacity .5s';
+let sw = null;
+window.S6d = async () => {
+  sErr.g.style.opacity = 0; sLat.g.style.opacity = 0;
+  rb.el.style.opacity = 1;
+  await sleep(500); rb.on(0);
+  await sleep(1300); rb.on(1);
+  sw = sw || toggle(S, 1360, 720, 'pause orders');
+  await sleep(600); sw.set(true);
+};
+
+// ---- where it fits
+const Y = System('sys', { highlight: ['api', 'db', 'pay', 'queue'], caption: ['Where it fits', 'Every part reports numbers to one dashboard'] });
+Y.node('dash', 1000, 880, 'chart', 'Dashboard', 'alerts', { w: 200, tone: 'hl' });
+['api', 'db', 'queue'].forEach(k => Y.link(k, 'dash', { dash: 1 }));
+window.S7 = async () => {
+  stopAll(); Y.show(); await sleep(500);
+  for (let i = 0; i < 3; i++) { ['api', 'db', 'queue'].forEach(k => Y.send(k, 'dash', { dur: 700, color: 'warn', r: 9 })); await sleep(1000); }
+  Y.badge('dash', 'held vs paid', 'acc', 'bottom');
+};
+
+// ---- trade-offs
+const T = Cards('trade', {
+  head: 'Two things to know', cols: 2, items: [
+    { icon: 'bell', color: 'warn', title: 'Too many alerts get ignored', text: 'Page only for what needs a person right now.' },
+    { icon: 'user', color: 'bad', title: 'Every alert needs an owner', text: 'And a runbook, or the page wakes someone who can\'t act.' },
+  ],
+});
+window.S8 = () => { stopAll(); T.show(); setTimeout(() => T.reveal(0), 300); };
+window.S8b = () => T.reveal(1);
+
+const Z = Say('say', 'If errors pass 2% for 2 minutes, I turn on the waiting room.');
+window.S9 = () => Z.show();
+</script>
+</body>
+</html>

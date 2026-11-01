@@ -1,0 +1,190 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="color-scheme" content="light">
+<title>Security basics: lecture</title>
+<link rel="stylesheet" href="../lib/lecture.css">
+<script src="../lib/icons.js"></script>
+<script src="../lib/lecture.js"></script>
+<style>
+.seg { transition: width 2.4s cubic-bezier(.4,0,.2,1); }
+.rec li { font-size: 34px; }
+.rec li.no { text-decoration: line-through; color: var(--bad); }
+</style>
+</head>
+<body>
+<script>
+// ---- page helpers: raw svg shapes and one place to stop loops
+const NS = 'http://www.w3.org/2000/svg';
+const C = { acc: '#2456c7', good: '#1a7f37', bad: '#cf222e', warn: '#bf8700', muted: '#5f6368', line: '#e3e0d8' };
+function shape(d, tag, attrs, parent) { const e = document.createElementNS(NS, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); (parent || d.fx).append(e); return e; }
+let stops = [];
+function stopAll() { stops.forEach(f => f()); stops = []; }
+function loop(ms, fn) { const id = setInterval(fn, ms); stops.push(() => clearInterval(id)); }
+
+Title({ num: 23, name: 'Security basics', sub: 'Five things, in one breath', phase: 'Go-live', pills: ['When asked'] });
+
+// ---- definition: the five habits
+const D = Define('def', {
+  html: 'Five habits you can name in one breath: <b>HTTPS</b> everywhere, <b>secrets in a vault</b>, the <b>provider handles cards</b>, <b>least privilege</b>, and <b>little personal data</b>.',
+  extra: { label: 'About 20 seconds in the interview, then back to the design.', pills: [] },
+});
+const dd = D.d;
+const five = [['lock', 'HTTPS everywhere'], ['vault', 'Secrets in a vault'], ['card', 'Provider handles cards'], ['key', 'Least privilege'], ['user', 'Little personal data']];
+five.forEach(([ic, l], i) => dd.node('f' + i, 480, 230 + i * 160, ic, l, '', { w: 560, h: 124, hidden: true }));
+window.SD = async () => { D.show(); for (let i = 0; i < 5; i++) { await sleep(i ? 1100 : 500); dd.pop('f' + i); } };
+window.SD2 = () => D.more();
+
+// ---- the problem: simple mistakes
+const P = Stage('prob', { caption: ['The problem', 'Small shops get hurt by simple mistakes'] });
+P.node('code', 380, 520, 'doc', 'Your code', 'db_password = "..."', { w: 320, hidden: true, tone: 'bad' });
+P.node('cards', 960, 520, 'db', 'Your database', 'card numbers', { w: 300, hidden: true, tone: 'bad' });
+P.node('wk', 1540, 520, 'gear', 'Text worker', 'can read everything', { w: 320, hidden: true, tone: 'bad' });
+P.node('atk', 960, 860, 'user', 'Attacker', '', { w: 220, hidden: true, tone: 'muted' });
+window.S1 = async () => {
+  stopAll(); P.show();
+  for (const k of ['code', 'cards', 'wk']) {
+    await sleep(k === 'code' ? 300 : 1500); P.pop(k);
+    P.tag(k, { code: 'leaked with the repo', cards: 'heavy PCI audits', wk: 'one hack, all data' }[k], 'bad', -110);
+  }
+};
+window.S1b = async () => {
+  P.pop('atk'); P.link('atk', 'code', { dash: 1, tone: 'bad' }); P.link('atk', 'cards', { dash: 1, tone: 'bad' }); P.link('atk', 'wk', { dash: 1, tone: 'bad' });
+  await sleep(500);
+  for (let i = 0; i < 3; i++) { await Promise.all(['code', 'cards', 'wk'].map(k => P.send(k, 'atk', { dur: 800, color: 'bad', r: 9 }))); }
+};
+
+// ---- how it works: one request path, five protections
+const R = Stage('how', { caption: ['1. HTTPS everywhere', 'Traffic is encrypted on the way'] });
+R.node('br', 180, 540, 'browser', 'Browser', '', { w: 180 });
+R.node('lb', 560, 540, 'split', 'Load balancer', '', { w: 210 });
+R.node('api', 940, 540, 'server', 'API', '', { w: 190 });
+R.node('db', 1340, 320, 'db', 'Postgres', '', { w: 200 });
+R.node('vault', 1340, 560, 'vault', 'Secrets manager', '', { w: 250, hidden: true });
+R.node('q', 1340, 800, 'queue', 'Queue', '', { w: 200 });
+R.node('wk', 1740, 800, 'gear', 'Text worker', '', { w: 210 });
+R.node('st', 560, 870, 'card', 'Stripe Checkout', 'hosted page', { w: 260, hidden: true });
+R.node('snoop', 300, 760, 'user', 'Snooper', 'same café Wi-Fi', { w: 230, tone: 'muted', hidden: true });
+R.link('br', 'lb', { id: 'h1' }); R.link('lb', 'api', { id: 'h2' }); R.link('api', 'db'); R.link('api', 'q'); R.link('q', 'wk');
+const rec = Panel(R, { x: 1500, y: 160, w: 380, title: 'Customer record', items: ['name', 'phone', 'birthday', 'home address'] });
+rec.el.classList.add('rec'); rec.el.style.opacity = 0; rec.el.style.transition = 'opacity .5s';
+window.S2 = async () => {
+  stopAll(); R.show();
+  R.linkTone('h1', 'good'); R.linkTone('h2', 'good');
+  R.pop('snoop'); R.link('snoop', 'br', { dash: 1 });
+  loop(900, async () => { await R.send('br', 'lb', { dur: 600, color: 'good', label: '🔒' }); R.send('lb', 'api', { dur: 500, color: 'good' }); });
+  await sleep(1200);
+  for (let i = 0; i < 3; i++) { R.tag('snoop', ['x8#Qz!', '%k2@w&', 'only noise'][i], 'muted', -100); await sleep(1100); }
+};
+window.S3 = async () => {
+  stopAll();
+  R.cap('2. Secrets in a vault', 'Not in the code');
+  R.pop('vault'); R.link('vault', 'api', { dash: 1 });
+  await sleep(700);
+  await R.send('vault', 'api', { dur: 900, color: 'warn', label: 'Stripe key' });
+  await R.send('vault', 'api', { dur: 900, color: 'warn', label: 'DB password' });
+  R.badge('api', 'keys at startup', 'warn', 'bottom');
+};
+window.S3b = async () => {
+  R.cap('3. Hosted checkout', 'Card numbers go to Stripe, not to you');
+  R.unbadge('api');
+  R.pop('st'); R.link('br', 'st', { dash: 1 }); R.link('st', 'api', { dash: 1 });
+  await sleep(600);
+  await R.send('br', 'st', { dur: 900, color: 'acc', label: 'card number' });
+  await sleep(300);
+  await R.send('st', 'api', { dur: 1000, color: 'good', label: 'order 42 paid' });
+  R.badge('api', 'no card data here', 'good', 'top');
+};
+window.S3c = async () => {
+  R.cap('4. Least privilege', 'Each part gets only what it needs');
+  R.unbadge('api');
+  R.link('wk', 'db', { dash: 1, tone: 'bad', id: 'wkdb' });
+  for (let i = 0; i < 2; i++) { await R.send('q', 'wk', { dur: 600, color: 'good', label: 'read ✓' }); }
+  await R.send('wk', { x: 1540, y: 560 }, { dur: 500, color: 'bad' });
+  R.badge('wk', 'database: denied', 'bad', 'top'); R.tone('wk', 'good');
+};
+window.S3d = async () => {
+  R.cap('5. Keep little personal data', 'What you never store can\'t leak');
+  rec.el.style.opacity = 1;
+  await sleep(400); rec.on(0); await sleep(400); rec.on(1);
+  await sleep(700);
+  const lis = rec.el.querySelectorAll('li');
+  lis[2].classList.add('no'); lis[2].style.opacity = 1; await sleep(500); lis[3].classList.add('no'); lis[3].style.opacity = 1;
+};
+
+// ---- what to say, what to skip
+const U = Sort('uses', {
+  head: 'In the interview', left: 'Name these five', right: 'Skip unless asked', rightBad: true, items: [
+    ['Hosted checkout', 'l'], ['Cipher suites', 'r'], ['HTTPS', 'l'], ['Key lengths', 'r'], ['Least privilege', 'l'],
+    ['Encryption math', 'r'], ['Vault', 'l'], ['Store little', 'l'],
+  ],
+});
+window.S5 = () => { stopAll(); U.show(); U.left(500); };
+window.S5b = () => U.right(600);
+
+// ---- scenario: "What about security?"
+const S = Stage('scen', { caption: ['', ''] });
+S.text(960, 200, '"What about security?"', { size: 56 });
+S.text(500, 320, 'Weak answer', { color: 'bad', size: 44 });
+S.text(1420, 320, 'Strong answer', { color: 'good', size: 44 });
+shape(S, 'line', { x1: 960, y1: 280, x2: 960, y2: 960, stroke: C.line, 'stroke-width': 4 }, S.bg);
+// weak: the last 15 minutes of the interview as a bar
+const BX = 120, BW = 760, BY = 470;
+shape(S, 'rect', { x: BX, y: BY, width: BW, height: 90, rx: 14, fill: '#eef0f4' }, S.bg);
+const segA = shape(S, 'rect', { x: BX, y: BY, width: 0, height: 90, rx: 14, fill: C.bad, class: 'seg' });
+const SX = 1040, SY = 760;
+shape(S, 'rect', { x: SX, y: SY, width: BW, height: 90, rx: 14, fill: '#eef0f4' }, S.bg);
+const sSec = shape(S, 'rect', { x: SX, y: SY, width: 0, height: 90, rx: 6, fill: C.warn, style: 'transition: width .6s' });
+const segB = shape(S, 'rect', { x: SX + 24, y: SY, width: BW - 24, height: 90, rx: 14, fill: C.good, opacity: 0, style: 'transition: opacity .4s' });
+const sT = S.text(SX + BW / 2, SY + 145, '', { color: 'good', size: 30 });
+const wkT1 = S.text(BX + BW / 3, BY + 145, '', { color: 'bad', size: 32 });
+const wkT2 = S.text(BX + BW * 5 / 6, BY + 145, '', { color: 'bad', size: 30 });
+S.text(BX, BY - 24, 'last 15 minutes of the interview', { color: 'muted', size: 26, anchor: 'start' });
+const wkClock = S.text(500, 800, '', { color: 'bad', size: 80 });
+// strong: five ticks and a 20 s clock
+const items = ['HTTPS everywhere', 'Stripe key, DB password in a vault', 'No card numbers: hosted checkout', 'Text worker reads the queue only', 'Store a name and phone number'];
+const ticks = items.map((t, i) => { const g = shape(S, 'g', { opacity: 0, style: 'transition: opacity .3s' }); const c = shape(S, 'text', { x: 1030, y: 410 + i * 62, fill: C.good, style: 'font-size:34px;font-weight:800' }, g); c.textContent = '✓'; const tt = shape(S, 'text', { x: 1080, y: 410 + i * 62, fill: '#1d1d1f', style: 'font-size:32px;font-weight:600' }, g); tt.textContent = t; return g; });
+const stClock = S.text(1720, 330, '', { color: 'good', size: 56 });
+window.S6 = () => { stopAll(); S.show(); };
+window.S6b = async () => {
+  segA.setAttribute('width', BW * 2 / 3); wkT1.textContent = 'encryption algorithms';
+  let m = 0; loop(220, () => { if (m < 10) wkClock.textContent = (++m) + ' min'; });
+  await sleep(2600);
+  wkT2.textContent = 'go-live: no time'; S.text(BX + BW * 5 / 6, BY + 56, '✕', { color: 'bad', size: 50 });
+};
+window.S6c = async () => {
+  let s = 0; loop(110, () => { if (s < 20) stClock.textContent = '0:' + String(++s).padStart(2, '0'); });
+  sSec.setAttribute('width', 24);
+  for (let i = 0; i < 5; i++) { ticks[i].setAttribute('opacity', 1); await sleep(440); }
+};
+window.S6d = async () => {
+  segB.setAttribute('opacity', 1); sT.textContent = 'go-live: plenty of time';
+};
+
+// ---- where it fits
+const Y = System('sys', { highlight: ['browser', 'lb', 'api', 'pay', 'queue', 'worker', 'db'], caption: ['Where it fits', 'Across the whole system'] });
+window.S7 = async () => {
+  stopAll(); Y.show(); await sleep(400);
+  Y.badge('lb', 'HTTPS', 'good', 'bottom'); await sleep(500);
+  Y.badge('api', 'keys from a vault', 'warn', 'bottom'); await sleep(500);
+  Y.badge('pay', 'cards stay here', 'acc', 'top'); await sleep(500);
+  Y.badge('worker', 'queue only', 'good', 'top');
+  for (let i = 0; i < 2; i++) { await Y.flow(['browser', 'cdn', 'lb', 'api', 'pay'], { dur: 380, color: 'good' }); }
+};
+
+// ---- two words to keep straight
+const T = Cards('trade', {
+  head: 'Two words to keep straight', cols: 2, items: [
+    { icon: 'badge', color: 'acc', title: 'Authentication', text: 'Proving who you are. A login.' },
+    { icon: 'key', color: 'warn', title: 'Authorization', text: 'What you\'re allowed to do once you\'re in.' },
+  ],
+});
+window.S8 = () => { stopAll(); T.show(); setTimeout(() => T.reveal(0), 300); };
+window.S8b = () => T.reveal(1);
+
+const Z = Say('say', 'HTTPS everywhere, secrets in a vault, no card data on our servers, and each service gets only what it needs.');
+window.S9 = () => Z.show();
+</script>
+</body>
+</html>

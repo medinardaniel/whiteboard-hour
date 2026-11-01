@@ -1,0 +1,135 @@
+{
+ "target": "index.html",
+ "viewport": [
+  1920,
+  1080
+ ],
+ "voice": "en-US-AndrewMultilingualNeural",
+ "rate": "+6%",
+ "pronounce": {
+  "API": "A P I"
+ },
+ "load_ms": 1200,
+ "gap_ms": 400,
+ "tail_ms": 1500,
+ "cues": [
+  {
+   "say": "Component twenty-one: safe deploys.",
+   "post_ms": 900
+  },
+  {
+   "say": "A safe deploy is a way of releasing new code. You send it to a few users first, keep a tested way back, and stop releasing around the event.",
+   "post_ms": 1200,
+   "do": "js:setTimeout(SD, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "Three tools do that: the canary, the rollback, and the code freeze.",
+   "post_ms": 1100,
+   "do": "js:setTimeout(SD2, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "Why does it matter? Most outages come from changes. A plain release replaces the code on every copy at once.",
+   "post_ms": 700,
+   "do": "js:setTimeout(S1, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "If it's broken, every customer is hit, until someone notices and undoes it.",
+   "post_ms": 1200,
+   "do": "js:setTimeout(S1b, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "So first, you release a canary: about five percent of traffic gets the new version. The name comes from the canary that miners carried, because it showed trouble first.",
+   "post_ms": 900,
+   "do": "js:setTimeout(S2, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "You compare its error rate with the old version's. If it's no worse, you widen it step by step: twenty-five, fifty, then a hundred percent.",
+   "post_ms": 900,
+   "do": "js:setTimeout(S3, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "If it is worse, you roll back. A rollback is a tested, one-step return to the last version.",
+   "post_ms": 1200,
+   "do": "js:setTimeout(S3b, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "And around the event itself, you stop releasing completely. That's a code freeze.",
+   "post_ms": 1200,
+   "do": "js:setTimeout(S3c, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "Think of it this way: each tool limits something. The canary limits who sees a bad release.",
+   "post_ms": 600,
+   "do": "js:setTimeout(S5, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "The rollback limits how long it lasts: minutes, not hours.",
+   "post_ms": 600,
+   "do": "js:setTimeout(S5b, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "And the freeze removes the risk while it matters most.",
+   "post_ms": 1200,
+   "do": "js:setTimeout(S5c, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "Now a real case. On the Wednesday before a snowy weekend, the tire shop ships a bug fix.",
+   "post_ms": 800,
+   "do": "js:setTimeout(S6, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "Without a canary, the fix goes to everyone at once. If it's bad, booking breaks for every customer.",
+   "post_ms": 800,
+   "do": "js:setTimeout(S6b, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "With a canary, one customer in twenty gets it first. Their error rate jumps from zero point one percent to four percent.",
+   "post_ms": 700,
+   "do": "js:setTimeout(S6c, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "So you roll back with one click. The proper fix ships Thursday morning, and then the code freezes until Monday.",
+   "post_ms": 1200,
+   "do": "js:setTimeout(S6d, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "Here's where it sits: the load balancer sends five percent of requests to the new API copies, and the rest to the old ones.",
+   "post_ms": 1200,
+   "do": "js:setTimeout(S7, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "Two other styles you'll hear. A rolling deploy replaces copies a few at a time, and can cut off work in progress.",
+   "post_ms": 700,
+   "do": "js:setTimeout(S8, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "Blue-green runs old and new side by side, and switches all traffic at once. Switching back is just as fast.",
+   "post_ms": 1200,
+   "do": "js:setTimeout(S8b, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "In the interview, say: nothing ships during the window.",
+   "post_ms": 600,
+   "do": "js:setTimeout(S9, 0)",
+   "settle_ms": 350
+  }
+ ]
+}

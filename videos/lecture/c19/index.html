@@ -1,0 +1,221 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="color-scheme" content="light">
+<title>Flags and kill switches: lecture</title>
+<link rel="stylesheet" href="../lib/lecture.css">
+<script src="../lib/icons.js"></script>
+<script src="../lib/lecture.js"></script>
+<style>
+.knob { transition: transform .35s cubic-bezier(.4,0,.2,1); }
+.track { transition: fill .35s; }
+.fade { transition: opacity .5s; }
+.btn rect { transition: fill .4s; }
+.panel li { font-family: Consolas, "Courier New", monospace; font-size:32px; }
+</style>
+</head>
+<body>
+<script>
+// ---- page helpers: raw svg shapes, toggles, a mock order button, and one place to stop loops
+const NS = 'http://www.w3.org/2000/svg';
+const C = { acc: '#2456c7', good: '#1a7f37', bad: '#cf222e', warn: '#bf8700', muted: '#5f6368', line: '#e3e0d8', off: '#c4c8cf' };
+function shape(d, tag, attrs, parent) { const e = document.createElementNS(NS, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); (parent || d.fx).append(e); return e; }
+let stops = [];
+function stopAll() { stops.forEach(f => f()); stops = []; }
+function loop(ms, fn) { const id = setInterval(fn, ms); stops.push(() => clearInterval(id)); }
+// a switch at (x, y) with a label on its right; set(true|false)
+function toggle(d, x, y, label, onColor = C.bad, size = 30) {
+  const g = shape(d, 'g', {}, d.nodes);
+  const tr = shape(d, 'rect', { x: x - 50, y: y - 27, width: 100, height: 54, rx: 27, fill: C.off, class: 'track' }, g);
+  const kn = shape(d, 'circle', { cx: x - 23, cy: y, r: 21, fill: '#fff', class: 'knob' }, g);
+  const t = shape(d, 'text', { x: x + 74, y: y + 10, style: `font-size:${size}px;font-weight:700;text-anchor:start`, fill: '#1d1d1f' }, g);
+  t.textContent = label;
+  return { set(on) { tr.setAttribute('fill', on ? onColor : C.off); kn.style.transform = on ? 'translateX(46px)' : 'none'; }, g, t };
+}
+// a mock order button: set(text, color)
+function button(d, x, y, w, text, color = C.good) {
+  const g = shape(d, 'g', { class: 'btn' }, d.nodes);
+  const r = shape(d, 'rect', { x: x - w / 2, y: y - 38, width: w, height: 76, rx: 38, fill: color }, g);
+  const t = shape(d, 'text', { x, y: y + 11, style: 'font-size:30px;font-weight:800;text-anchor:middle', fill: '#fff' }, g);
+  t.textContent = text;
+  return { set(s, c) { t.textContent = s; r.setAttribute('fill', c || color); }, g };
+}
+
+Title({ num: 19, name: 'Flags and kill switches', sub: 'Change behavior in seconds, without a release', phase: 'Go-live', pills: ['Pause orders', 'Waiting room on', 'Hide photos', 'Close a slot'] });
+
+// ---- definition: switches on the left, the live site on the right
+const D = Define('def', {
+  html: 'A <b>setting you flip while the site runs</b>, with <b>no code release</b>. A <b>kill switch</b> is a flag for emergencies: it turns something off fast.',
+  extra: { label: 'The app re-reads them every few seconds from:', pills: ['A database table', 'A config service', 'An admin page'] },
+});
+const dd = D.d;
+dd.text(250, 270, 'Switches', { color: 'muted', size: 30 });
+const dPause = toggle(dd, 110, 360, 'Pause orders', C.bad, 28);
+const dWait = toggle(dd, 110, 470, 'Waiting room', C.bad, 28);
+const dPhotos = toggle(dd, 110, 580, 'Hide photos', C.bad, 28);
+const dSlot = toggle(dd, 110, 690, 'Close a slot', C.bad, 28);
+shape(dd, 'rect', { x: 520, y: 250, width: 400, height: 560, rx: 26, fill: '#fff', stroke: C.line, 'stroke-width': 4 }, dd.bg);
+dd.text(720, 310, 'Pizza shop', { size: 34 });
+const dPic = shape(dd, 'g', { class: 'fade' }, dd.nodes);
+shape(dd, 'rect', { x: 580, y: 350, width: 280, height: 220, rx: 18, fill: '#f3e3cf' }, dPic);
+dPic.insertAdjacentHTML('beforeend', `<g transform="translate(660,400) scale(5)" class="ico">${ICON.photo}</g>`);
+const dBtn = button(dd, 720, 690, 320, 'Order now');
+window.SD = async () => {
+  D.show();
+  await sleep(1500);
+  dPhotos.set(true); dPic.style.opacity = .08;
+  await sleep(2200);
+  dPhotos.set(false); dPic.style.opacity = 1;
+  await sleep(900);
+  dPause.set(true); dBtn.set('Paused a few min', C.muted);
+};
+window.SD2 = () => D.more();
+
+// ---- the problem: changing behavior means a release, mid-incident
+const P = Stage('prob', { caption: ['The problem', 'No switch? Then a change means a release'] });
+const steps = [['doc', 'Write code'], ['users', 'Review'], ['check', 'Build, test'], ['pipeline', 'Release']];
+steps.forEach(([ic, l], i) => P.node('p' + i, 330 + i * 420, 480, ic, l, '', { w: 220, tone: 'muted' }));
+for (let i = 0; i < 3; i++) P.link('p' + i, 'p' + (i + 1));
+const pMin = P.text(960, 760, '0 min', { size: 90 });
+const pFail = P.text(960, 870, '', { color: 'bad', size: 50 });
+let pm = 0, pf = 0;
+window.S1 = async () => {
+  stopAll(); P.show();
+  setTimeout(() => { pFail.textContent = 'checkouts failing the whole time'; }, 900);
+  for (let i = 0; i < 4; i++) {
+    P.tone('p' + i, 'warn hl');
+    for (let k = 0; k < 5; k++) { pm++; pMin.textContent = pm + ' min'; await sleep(170); }
+    P.tone('p' + i, 'good');
+  }
+  pMin.textContent = '20+ min';
+};
+window.S1b = async () => {
+  P.cap('Twenty minutes of failed checkouts', 'All while the fix is written and shipped');
+  await sleep(2600); stopAll();
+};
+
+// ---- how it works: a named setting, read by every copy
+const M = Stage('how', { caption: ['A flag is a named setting', 'Stored outside the code, read every few seconds'] });
+M.node('fl', 330, 570, 'flag', 'Flags', 'pause_orders = off', { w: 290 });
+['1', '2', '3'].forEach((n, i) => M.node('c' + n, 1000, 330 + i * 240, 'server', 'API copy ' + n, '', { w: 200 }));
+['c1', 'c2', 'c3'].forEach(k => M.link('fl', k, { dash: 1 }));
+shape(M, 'rect', { x: 1240, y: 360, width: 560, height: 400, rx: 26, fill: '#fff', stroke: C.line, 'stroke-width': 4 }, M.bg);
+M.text(1520, 430, 'What customers see', { color: 'muted', size: 30 });
+const mBtn = button(M, 1520, 560, 440, 'Order now');
+const mNote = M.text(1520, 680, '', { color: 'muted', size: 28, weight: 600 });
+const mPause = toggle(M, 190, 860, 'pause_orders', C.bad, 30);
+const mPhotos = toggle(M, 190, 960, 'hide_photos', C.bad, 30);
+mPause.g.style.opacity = 0; mPhotos.g.style.opacity = 0;
+function readFlags(color) { loop(1300, () => ['c1', 'c2', 'c3'].forEach(k => M.send('fl', k, { dur: 600, r: 9, color }))); }
+const code = Panel(M, { x: 1240, y: 800, w: 560, items: ['if pause_orders:', '  show "Paused a few min"', 'else: show Order button'] });
+code.el.style.opacity = 0; code.el.style.transition = 'opacity .5s';
+window.S2 = () => { stopAll(); M.show(); readFlags('muted'); };
+window.S3 = async () => {
+  M.cap('The code checks it', 'Before it acts');
+  code.el.style.opacity = 1;
+  for (let i = 0; i < 3; i++) { code.on(i); await sleep(700); }
+};
+window.S3b = async () => {
+  M.cap('Flip it in an admin page', 'Seconds later, every copy has it');
+  mPause.g.style.transition = mPhotos.g.style.transition = 'opacity .5s';
+  mPause.g.style.opacity = 1; mPhotos.g.style.opacity = 1;
+  await sleep(600);
+  mPause.set(true); M.rename('fl', 'Flags', 'pause_orders = ON'); M.tone('fl', 'bad');
+  stopAll(); readFlags('bad');
+  await sleep(1500);
+  ['c1', 'c2', 'c3'].forEach(k => M.badge(k, 'paused', 'bad', 'top'));
+  mBtn.set('Paused a few min', C.muted); mNote.textContent = 'Paid orders still finish';
+};
+window.S3c = async () => {
+  M.cap('A kill switch: a flag for emergencies', 'Turn extras off so the core keeps working');
+  mPause.set(false); M.rename('fl', 'Flags', 'hide_photos = ON'); M.tone('fl', 'warn');
+  ['c1', 'c2', 'c3'].forEach(k => M.unbadge(k));
+  mBtn.set('Order now'); mNote.textContent = '';
+  await sleep(700);
+  mPhotos.set(true);
+  await sleep(1200);
+  ['c1', 'c2', 'c3'].forEach(k => M.badge(k, 'no photos', 'warn', 'top'));
+  mNote.textContent = 'Photos hidden, ordering works';
+};
+
+// ---- what it's for
+const U = Cards('uses', {
+  head: 'Switches worth installing before the event', cols: 4, items: [
+    { icon: 'power', color: 'bad', title: 'Pause orders', text: 'When payments fail.' },
+    { icon: 'hourglass', title: 'Waiting room', text: 'When traffic is too much.' },
+    { icon: 'photo', color: 'warn', title: 'Hide photos', text: 'When the database is busy.' },
+    { icon: 'clock', title: 'Close a slot', text: 'When the 7 PM ovens are full.' },
+  ],
+});
+window.S5 = async () => { stopAll(); U.show(); for (let i = 0; i < 4; i++) { await sleep(i ? 800 : 300); U.reveal(i); } };
+
+// ---- scenario: 4:10 PM, payment errors spike
+const S = Stage('scen', { caption: ['Game day, 4:10 PM', 'Payment errors spike'] });
+S.node('api', 300, 430, 'server', 'API', '', { w: 190 });
+S.node('st', 700, 430, 'card', 'Stripe', 'errors', { w: 190 });
+S.link('api', 'st');
+const sPause = toggle(S, 1110, 400, 'pause new orders', C.bad, 32);
+const sPhotos = toggle(S, 1110, 510, 'hide photos', C.bad, 32);
+const sBtn = button(S, 1460, 290, 460, 'Order now');
+// timeline: 4:10 to 4:40, two tracks
+const T0 = 380, T1 = 1780, tx = m => T0 + (T1 - T0) * m / 30;
+shape(S, 'line', { x1: T0, y1: 930, x2: T1, y2: 930, stroke: C.muted, 'stroke-width': 4 }, S.bg);
+[0, 10, 15, 20, 30].forEach(m => S.text(tx(m), 975, '4:' + (10 + m), { color: 'muted', size: 26 }));
+S.text(340, 690, 'Ship a fix', { color: 'bad', size: 32, anchor: 'end' });
+S.text(340, 830, 'Flip a switch', { color: 'good', size: 32, anchor: 'end' });
+function band(y, m0, m1, color, label, ms) {
+  const r = shape(S, 'rect', { x: tx(m0), y: y - 34, width: 0, height: 68, rx: 12, fill: color });
+  r.animate([{ width: '0px' }, { width: (tx(m1) - tx(m0)) + 'px' }], { duration: ms, fill: 'forwards', easing: 'ease-out' });
+  if (label) setTimeout(() => S.text((tx(m0) + tx(m1)) / 2, y + 10, label, { color: '#fff', size: 26 }), ms);
+  return r;
+}
+window.S6 = async () => {
+  stopAll(); S.show();
+  S.tone('st', 'bad');
+  let k = 0; loop(600, async () => { await S.send('api', 'st', { dur: 400 }); S.send('st', 'api', { dur: 400, color: 'bad' }); if (k++ % 3 === 0) S.tag('st', 'payment failed', 'bad'); });
+};
+window.S6b = () => { band(690, 0, 22, C.bad, 'write, review, release: 20+ min failing', 3000); };
+window.S6c = async () => {
+  sPause.set(true);
+  band(830, 0, 0.6, C.bad, '', 300);
+  await sleep(1200);
+  stopAll(); sBtn.set('Paused for a few minutes', C.muted);
+  band(830, 0.6, 15, C.muted, 'paused, paid orders keep going', 2400);
+  loop(900, () => S.send('st', 'api', { dur: 600, color: 'good', label: 'paid' }));
+};
+window.S6d = async () => {
+  stopAll(); sPause.set(false); sBtn.set('Order now'); S.tone('st', 'good');
+  S.cap('4:25 PM: flip it back', 'Later the database gets busy: hide photos');
+  band(830, 15, 30, C.good, 'orders open', 1500);
+  loop(700, async () => { await S.send('api', 'st', { dur: 400, color: 'good' }); });
+  await sleep(2600);
+  sPhotos.set(true);
+};
+
+// ---- where it fits
+const Y = System('sys', { highlight: ['api', 'db'], labels: { db: ['Postgres', 'flags table'] } });
+window.S7 = async () => {
+  stopAll(); Y.show(); await sleep(500);
+  for (let i = 0; i < 3; i++) { Y.send('db', 'api', { dur: 600, color: 'warn', label: i ? '' : 'flags' }); await sleep(1100); }
+};
+window.S7b = async () => {
+  Y.badge('api', 'reads flags, no deploy', 'acc', 'bottom');
+  for (let i = 0; i < 3; i++) { await Y.flow(['browser', 'cdn', 'lb', 'api'], { dur: 380 }); await sleep(200); }
+};
+
+// ---- trade-offs
+const T = Cards('trade', {
+  head: 'Two things to know', cols: 2, items: [
+    { icon: 'check', color: 'warn', title: 'Test every switch', text: 'A switch nobody has flipped may not work when you need it. Flip each one on game day.' },
+    { icon: 'sweep', color: 'bad', title: 'Clean them up', text: 'Old flags pile up and make the code hard to follow. Remove them after the event.' },
+  ],
+});
+window.S8 = () => { stopAll(); T.show(); setTimeout(() => T.reveal(0), 300); };
+window.S8b = () => T.reveal(1);
+
+const Z = Say('say', 'Every switch is tested on game day.');
+window.S9 = () => Z.show();
+</script>
+</body>
+</html>

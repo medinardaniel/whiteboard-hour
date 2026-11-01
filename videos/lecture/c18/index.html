@@ -1,0 +1,242 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="color-scheme" content="light">
+<title>Timeouts, retries, circuit breaker: lecture</title>
+<link rel="stylesheet" href="../lib/lecture.css">
+<script src="../lib/icons.js"></script>
+<script src="../lib/lecture.js"></script>
+</head>
+<body>
+<script>
+// ---- page helpers: raw svg shapes, and one place to stop every running loop
+const NS = 'http://www.w3.org/2000/svg';
+const C = { acc: '#2456c7', good: '#1a7f37', bad: '#cf222e', warn: '#bf8700', muted: '#5f6368', line: '#e3e0d8' };
+function shape(d, tag, attrs, parent) { const e = document.createElementNS(NS, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); (parent || d.fx).append(e); return e; }
+let stops = [];
+function stopAll() { stops.forEach(f => f()); stops = []; }
+function loop(ms, fn) { const id = setInterval(fn, ms); stops.push(() => clearInterval(id)); }
+
+Title({ num: 18, name: 'Timeouts, retries, circuit breaker', sub: 'Three rules for every outside call', phase: 'Call third parties safely', pills: ['Stripe', 'SMS', 'Any outside service'] });
+
+// ---- definition: three guards on the line to an outside service
+const D = Define('def', {
+  html: 'Three rules you wrap around <b>any call to an outside service</b>: <b>give up</b> after a few seconds, <b>retry</b> with growing waits, and <b>stop calling</b> for a while after repeated failures.',
+  extra: { label: 'A pattern, not a product. It lives in:', pills: ['Your HTTP client', 'Stripe and SMS SDKs', 'A small library'] },
+});
+const dd = D.d;
+dd.node('api', 140, 540, 'server', 'Your API', '', { w: 170 });
+dd.node('st', 830, 540, 'card', 'Stripe', 'outside', { w: 170 });
+dd.link('api', 'st');
+dd.node('r1', 485, 300, 'timer', 'Timeout', 'give up at 2 s', { w: 240, hidden: true });
+dd.node('r2', 485, 540, 'retry', 'Retry', 'waits grow', { w: 240, hidden: true });
+dd.node('r3', 485, 780, 'breaker', 'Breaker', 'pause after failures', { w: 240, hidden: true });
+window.SD = async () => {
+  D.show();
+  dd.popAll(['r1', 'r2', 'r3'], 700);
+  await sleep(2400);
+  loop(1100, () => dd.send('api', 'st', { dur: 900, color: 'good' }));
+};
+window.SD2 = () => D.more();
+
+// ---- the problem: one slow outside call fills every server thread
+const P = Stage('prob', { caption: ['The problem', 'Stripe slows down, and your servers wait'] });
+P.node('u', 230, 470, 'users', 'Customers', '', { w: 190 });
+P.node('api', 860, 470, 'server', 'Your servers', '', { w: 230 });
+P.node('st', 1560, 470, 'card', 'Stripe', 'normally 300 ms', { w: 230 });
+P.link('u', 'api'); P.link('api', 'st');
+P.queue('th', 860, 790, 8, 'Server threads waiting on Stripe');
+let busy = 0;
+window.S1 = async () => {
+  stopAll(); P.show();
+  await sleep(300);
+  P.tone('st', 'warn'); P.rename('st', 'Stripe', 'now 8 s'); P.badge('st', '300 ms → 8 s', 'warn');
+  loop(700, async () => {
+    await P.send('u', 'api', { dur: 450 });
+    if (busy < 6) { busy++; P.fill('th', busy, 'warn'); }
+    P.send('api', 'st', { dur: 2600, color: 'warn' });
+  });
+};
+window.S1b = async () => {
+  stopAll();
+  P.cap('Every thread is stuck', 'Even pages that never touch Stripe stop loading');
+  for (; busy < 8; busy++) { P.fill('th', busy + 1, 'warn'); await sleep(350); }
+  P.tone('api', 'bad'); P.rename('api', 'Your servers', 'no free threads');
+  for (let i = 0; i < 4; i++) { P.send('u', 'api', { dur: 500, color: 'muted' }); P.tag('u', i % 2 ? 'checkout spins' : 'menu won\'t load', 'bad'); await sleep(1000); }
+};
+
+// ---- how it works 1: timeout, then retries with growing waits
+const M = Stage('how', { caption: ['Rule 1: a timeout', 'The longest you wait for an answer'] });
+M.node('api', 380, 430, 'server', 'Your API', '', { w: 210 });
+M.node('st', 1540, 430, 'card', 'Stripe', 'slow today', { w: 210, tone: 'warn' });
+M.link('api', 'st');
+const TL = { y: 820, x0: 220 };
+function mark(x, ok, label) {
+  shape(M, 'circle', { cx: x, cy: TL.y, r: 26, fill: ok ? C.good : C.bad });
+  M.text(x, TL.y + 10, ok ? '✓' : '✕', { color: '#fff', size: 30 });
+  M.text(x, TL.y - 46, label, { color: ok ? 'good' : 'bad', size: 26 });
+}
+async function waitBar(x1, x2, label, ms) {
+  const l = shape(M, 'line', { x1: x1 + 30, y1: TL.y, x2: x1 + 30, y2: TL.y, stroke: C.warn, 'stroke-width': 10, 'stroke-linecap': 'round' });
+  const t0 = performance.now();
+  await new Promise(res => { const st = () => { const k = Math.min(1, (performance.now() - t0) / ms); l.setAttribute('x2', x1 + 30 + (x2 - x1 - 60) * k); k < 1 ? requestAnimationFrame(st) : res(); }; st(); });
+  M.text((x1 + x2) / 2, TL.y + 62, label, { color: 'warn', size: 26 });
+}
+window.S2 = async () => {
+  stopAll(); M.show();
+  M.send('api', 'st', { dur: 700, label: 'pay order 42' });
+  await sleep(300);
+  M.ring('api', 2000, 'warn'); M.badge('api', 'waiting...', 'muted');
+  await sleep(2050);
+  M.badge('api', 'gave up at 2 s', 'warn'); M.tag('api', 'thread freed', 'good', 130);
+};
+window.S3 = async () => {
+  M.cap('Rule 2: retry with backoff', 'Wait longer before each new try');
+  M.unbadge('api');
+  const xs = [TL.x0, TL.x0 + 220, TL.x0 + 620, TL.x0 + 1420];
+  const waits = [['wait 100 ms', 450], ['wait 200 ms', 900], ['wait 400 ms', 1800]];
+  for (let i = 0; i < 4; i++) {
+    await M.send('api', 'st', { dur: 500, color: i === 3 ? 'good' : 'bad' });
+    mark(xs[i], i === 3, 'try ' + (i + 1));
+    if (i < 3) await waitBar(xs[i], xs[i + 1], waits[i][0], waits[i][1]);
+  }
+  M.tone('st', 'good');
+};
+window.S3b = async () => {
+  M.cap('Jitter, and one idempotency key', 'Spread the retries out; charge only once');
+  for (let i = 0; i < 3; i++) {
+    const j = 40 + Math.round(Math.random() * 120) + i * 60;
+    shape(M, 'circle', { cx: TL.x0 + 220 + j, cy: TL.y + 110, r: 12, fill: C.muted });
+    shape(M, 'circle', { cx: TL.x0 + 620 + j * 1.6, cy: TL.y + 110, r: 12, fill: C.muted });
+  }
+  M.text(TL.x0 + 1180, TL.y + 120, 'other clients retry at random offsets', { color: 'muted', size: 24, anchor: 'start', weight: 600 });
+  for (let i = 0; i < 2; i++) { await M.send('api', 'st', { dur: 900, color: 'acc', label: 'key: order-42' }); await sleep(200); }
+  M.badge('st', 'same key: charged once', 'good');
+};
+
+// ---- how it works 2: the circuit breaker's three states
+const B = Stage('brk', { caption: ['Rule 3: the circuit breaker', 'It starts closed: calls flow through'] });
+B.node('api', 300, 420, 'server', 'Your API', '', { w: 200 });
+B.node('br', 960, 420, 'breaker', 'Breaker', 'closed', { w: 220, tone: 'good' });
+B.node('st', 1620, 420, 'card', 'Stripe', '', { w: 200 });
+B.link('api', 'br'); B.link('br', 'st');
+B.node('closed', 560, 830, '', 'Closed', 'calls flow', { w: 260, h: 130 });
+B.node('open', 960, 830, '', 'Open', 'fail fast', { w: 260, h: 130, tone: 'muted' });
+B.node('half', 1360, 830, '', 'Half-open', 'test one call', { w: 260, h: 130, tone: 'muted' });
+B.link('closed', 'open'); B.link('open', 'half'); B.link('half', 'closed', { curve: -150 });
+function state(k) { ['closed', 'open', 'half'].forEach(s => B.tone(s, s === k ? ({ closed: 'good hl', open: 'bad hl', half: 'warn hl' })[k] : 'muted')); }
+window.S4 = async () => {
+  stopAll(); B.show(); state('closed');
+  await sleep(400);
+  B.tone('st', 'bad');
+  for (let n = 1; n <= 5; n++) {
+    await B.flow(['api', 'br', 'st'], { dur: 330 });
+    B.send('st', 'br', { dur: 330, color: 'bad' }); B.tag('st', 'error', 'bad');
+    await sleep(340);
+    B.badge('br', 'failures in a row: ' + n, n < 5 ? 'warn' : 'bad');
+  }
+  state('open'); B.tone('br', 'bad'); B.rename('br', 'Breaker', 'open');
+  B.cap('Rule 3: the circuit breaker', 'Five failures in a row: it opens');
+};
+window.S4b = async () => {
+  B.cap('Open: fail fast for 30 s', 'No waiting on Stripe at all');
+  B.badge('br', 'open for 30 s', 'bad'); B.linkTone('br-st', 'dim');
+  B.ring('br', 6500, 'bad');
+  for (let i = 0; i < 5; i++) {
+    await B.send('api', 'br', { dur: 400 });
+    B.send('br', 'api', { dur: 400, color: 'bad', label: 'fail fast' });
+    if (i === 1) B.badge('api', '"try again in a minute"', 'acc', 'bottom');
+    await sleep(500);
+  }
+};
+window.S4c = async () => {
+  B.cap('Half-open: test one call', 'It works: close. It fails: open again');
+  state('half'); B.tone('br', 'warn'); B.rename('br', 'Breaker', 'half-open'); B.badge('br', 'one test call', 'warn'); B.linkTone('br-st', '');
+  B.tone('st', 'good'); B.unbadge('api');
+  await sleep(500);
+  await B.flow(['api', 'br', 'st'], { dur: 500, color: 'warn' });
+  await B.flow(['st', 'br', 'api'], { dur: 500, color: 'good', label: 'OK' });
+  state('closed'); B.tone('br', 'good'); B.rename('br', 'Breaker', 'closed'); B.badge('br', 'closed again', 'good');
+  loop(700, () => B.flow(['api', 'br', 'st'], { dur: 300, color: 'good' }));
+};
+
+// ---- what it's for
+const U = Cards('uses', {
+  head: 'Wrap every call that leaves your system', items: [
+    { icon: 'card', title: 'Payments', text: 'Stripe: 2 s timeout, retry with the same key.' },
+    { icon: 'chat', title: 'Texts and email', text: 'Retried by a worker, so the order never waits.' },
+    { icon: 'globe', title: 'Anything outside', text: 'Maps, shipping rates, another team\'s service.' },
+  ],
+});
+window.S5 = () => { stopAll(); U.show(); setTimeout(() => U.reveal(0), 300); };
+window.S5b = () => U.reveal(1);
+window.S5c = () => U.reveal(2);
+
+// ---- scenario: pizza shop game day, Stripe slows to 8 s
+const S = Stage('scen', { caption: ['', ''] });
+S.text(500, 200, 'Without the three rules', { color: 'bad', size: 46 });
+S.text(1440, 200, 'With them', { color: 'good', size: 46 });
+shape(S, 'line', { x1: 960, y1: 250, x2: 960, y2: 930, stroke: C.line, 'stroke-width': 4 }, S.bg);
+S.node('lu', 170, 470, 'users', 'Customers', '', { w: 170 });
+S.node('la', 500, 470, 'server', 'Servers', '', { w: 170 });
+S.node('ls', 830, 470, 'card', 'Stripe', '8 s', { w: 170, tone: 'warn' });
+S.link('lu', 'la'); S.link('la', 'ls');
+S.queue('lq', 500, 760, 6, 'Busy threads');
+S.node('ru', 1080, 470, 'users', 'Customers', '', { w: 150 });
+S.node('ra', 1310, 470, 'server', 'Servers', '', { w: 150 });
+S.node('rb', 1540, 470, 'breaker', 'Breaker', 'closed', { w: 160, tone: 'good' });
+S.node('rs', 1770, 470, 'card', 'Stripe', '8 s', { w: 150, tone: 'warn' });
+S.link('ru', 'ra'); S.link('ra', 'rb'); S.link('rb', 'rs');
+S.queue('rq', 1310, 760, 6, 'Busy threads');
+S.text(960, 1010, 'Pizza shop, game day: Stripe goes from 300 ms to 8 s', { color: 'muted', size: 34, weight: 600 });
+let lb = 0;
+window.S6 = async () => {
+  stopAll(); S.show(); S.fill('lq', ++lb, 'warn');
+  loop(800, async () => { await S.send('lu', 'la', { dur: 450 }); if (lb < 3) S.fill('lq', ++lb, 'warn'); S.send('la', 'ls', { dur: 2200, color: 'warn' }); });
+  loop(800, async () => { await S.send('ru', 'ra', { dur: 450 }); S.send('ra', 'rb', { dur: 400, color: 'warn' }); });
+  S.fill('rq', 1, 'warn');
+};
+window.S6b = async () => {
+  for (; lb < 6; lb++) { S.fill('lq', lb + 1, 'warn'); await sleep(450); }
+  S.tone('la', 'bad'); S.rename('la', 'Servers', 'all threads stuck');
+  for (let i = 0; i < 4; i++) { S.tag('lu', i % 2 ? 'checkout hangs' : 'menu won\'t load', 'bad'); await sleep(1100); }
+};
+window.S6c = async () => {
+  S.badge('ra', 'gives up at 2 s', 'warn', 'bottom');
+  await sleep(1200);
+  for (let n = 1; n <= 5; n++) { S.badge('rb', n + ' failures', 'warn'); S.tag('rs', 'slow', 'bad'); await sleep(450); }
+  S.tone('rb', 'bad'); S.rename('rb', 'Breaker', 'open'); S.badge('rb', 'open 30 s', 'bad'); S.linkTone('rb-rs', 'dim');
+};
+window.S6d = async () => {
+  S.unbadge('ra'); S.badge('rq', 'threads free', 'good');
+  for (let i = 0; i < 4; i++) { S.tag('ru', i % 2 ? 'menu: fast' : 'try again in a minute', i % 2 ? 'good' : 'acc'); await sleep(1200); }
+};
+
+// ---- where it fits
+const Y = System('sys', { highlight: ['api', 'pay', 'worker', 'sms'] });
+window.S7 = async () => {
+  stopAll(); Y.show(); await sleep(500);
+  Y.badge('api', 'timeout · retry · breaker', 'acc', 'bottom');
+  for (let i = 0; i < 2; i++) { await Y.flow(['browser', 'cdn', 'lb', 'api', 'pay'], { dur: 420 }); await sleep(250); }
+};
+window.S7b = async () => {
+  Y.badge('worker', 'same three rules', 'acc', 'bottom');
+  for (let i = 0; i < 3; i++) { await Y.flow(['api', 'queue', 'worker', 'sms'], { dur: 450 }); await sleep(250); }
+};
+
+// ---- trade-offs
+const T = Cards('trade', {
+  head: 'Two things to watch', cols: 2, items: [
+    { icon: 'retry', color: 'warn', title: 'Retries add load', text: 'Retry a few times at most, with backoff and jitter, or you pile onto a service that is already struggling.' },
+    { icon: 'key', color: 'bad', title: 'Only retry what\'s safe', text: 'A payment retry needs the same idempotency key, or one order is charged twice.' },
+  ],
+});
+window.S8 = () => { stopAll(); T.show(); setTimeout(() => T.reveal(0), 300); };
+window.S8b = () => T.reveal(1);
+
+const Z = Say('say', 'Retries are safe only because the call carries an idempotency key.');
+window.S9 = () => Z.show();
+</script>
+</body>
+</html>
