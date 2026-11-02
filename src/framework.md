@@ -2,6 +2,8 @@
 
 **TLDR.** Turn the vague ask into numbers. Build the simplest V1. Defend every choice. Add spike defenses cheapest first. Plan go-live. Close with trade-offs. Keep 2 minutes for questions.
 
+**See it done:** [watch a full mock interview](questions.html#mock), the pizza shop question in 11 minutes, chaptered by phase.
+
 ```timeline
 1|Clarify|6
 2|Version 1|14

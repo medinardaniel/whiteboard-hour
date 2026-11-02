@@ -198,6 +198,25 @@ def render(lines, toc, with_visuals=False):
                     '<span class="hide">Hide answer</span></summary>'
                     f'<div class="answer-body">{inner}</div></details>'
                 )
+            elif kind == "mock":
+                # ::: mock name | Label, then "- m:ss Chapter" lines: a hidden video with chapter jumps
+                name, _, label = [x.strip() for x in args.partition("|")]
+                chaps = []
+                for t in lines[i + 1 : j]:
+                    cm = re.match(r"\s*-\s*(\d+):(\d\d)\s+(.+)", t)
+                    if cm:
+                        sec = int(cm.group(1)) * 60 + int(cm.group(2))
+                        chaps.append(f'<button type="button" data-t="{sec}"><b>{cm.group(1)}:{cm.group(2)}</b> {inline(cm.group(3))}</button>')
+                out.append(
+                    f'<details class="answer mock" id="mock"><summary>{inline(label)}</summary><div class="answer-body">'
+                    f'<video class="cc-video" controls playsinline preload="metadata" poster="videos/{name}.jpg">'
+                    f'<source src="videos/{name}.mp4" type="video/mp4"></video>'
+                    f'<div class="chapters">{"".join(chaps)}</div></div></details>'
+                    "<script>(function(){var d=document.getElementById('mock'),v=d.querySelector('video');"
+                    "if(location.hash==='#mock')d.open=true;"
+                    "d.querySelectorAll('.chapters button').forEach(function(b){b.onclick=function(){"
+                    "v.currentTime=+b.dataset.t;v.play();};});})();</script>"
+                )
             elif kind == "phase":
                 num, name, mins = [x.strip() for x in args.split("|")]
                 out.append(f'<section class="phase" id="phase-{num}"><div class="phase-head"><span class="pn">{num}</span>'
@@ -361,7 +380,7 @@ details.answer > summary { display: none; }
 #part-components .card dd.f-example::after { content: none; }
 #part-components .card dt.f-example { display: block; margin-top: .3rem; }
 #part-components .card dt.f-example::after { content: none; }
-.cc-video { display: none; }
+.cc-video, details.mock { display: none; }
 .cover { height: 9in; display: flex; flex-direction: column; justify-content: center; }
 .cover h1 { font-size: 30pt; margin: 0 0 .5rem; }
 .cover ol { font-size: 12pt; }

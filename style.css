@@ -130,6 +130,12 @@ details.answer[open] > summary { background: var(--accent-soft); color: var(--ac
   border: 1px solid var(--line); border-radius: 10px; background: var(--card);
 }
 .answer-body h3:first-child { margin-top: 1rem; }
+details.mock > summary { background: var(--card); color: var(--accent); border: 1.5px solid var(--accent); }
+details.mock > summary::before { content: "\25B6\FE0E  "; }
+.chapters { display: flex; flex-wrap: wrap; gap: .4rem; margin: .3rem 0 .6rem; }
+.chapters button { font: inherit; font-size: .9rem; padding: .35rem .7rem; border-radius: 999px; cursor: pointer;
+  border: 1px solid var(--line); background: var(--bg); color: var(--fg); }
+.chapters button b { color: var(--accent); font-variant-numeric: tabular-nums; }
 
 /* Table of contents */
 details.toc { margin: .5rem 0 1rem; border: 1px solid var(--line); border-radius: 10px; padding: .5rem .9rem; background: var(--card); }

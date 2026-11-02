@@ -21,6 +21,17 @@ Then the [Follow-up drills](#drills): 20 questions interviewers ask after the de
 
 > You run a small pizza shop and want to take online orders for the big game on Sunday.
 
+::: mock pizza-mock | Watch the full mock (11 min)
+- 0:00 Intro
+- 0:17 Clarify
+- 2:38 Version 1
+- 4:37 Decisions
+- 5:52 Spike
+- 8:26 Go-live
+- 10:18 Wrap-up
+- 11:07 Debrief
+:::
+
 ::: answer
 
 ### 1. Clarify
