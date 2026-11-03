@@ -4,6 +4,7 @@ Not needed to host the site: the generated .html files are committed.
 Supports a small markdown subset plus three extras:
   ```flow      stacked boxes (one line per row, " | " splits a row)
   ::: answer   a hidden answer revealed by "See answer"
+  ::: reveal X a hidden block revealed by a button labeled X (later stages of coding questions)
   {#id}        an explicit heading id
 Tables become cards, so nothing scrolls sideways on a phone.
 """
@@ -23,6 +24,8 @@ PAGES = [
 # Built but not in the nav or the PDF.
 EXTRA_PAGES = [("reference.md", "reference.html", "All components")]
 VISUAL_PAGES = ("components.md", "reference.md")
+# The Coding tab of the Questions page (check its answer keys with check_coding.py).
+CODING = "coding.md"
 SITE = "Whiteboard Hour"
 
 
@@ -196,6 +199,12 @@ def render(lines, toc, with_visuals=False):
                 out.append(
                     '<details class="answer"><summary><span class="show">See answer</span>'
                     '<span class="hide">Hide answer</span></summary>'
+                    f'<div class="answer-body">{inner}</div></details>'
+                )
+            elif kind == "reveal":
+                # ::: reveal Stage 2: a later stage of a coding question, hidden until clicked
+                out.append(
+                    f'<details class="answer reveal"><summary>{inline(args)}</summary>'
                     f'<div class="answer-body">{inner}</div></details>'
                 )
             elif kind == "mock":
@@ -405,21 +414,23 @@ def strip_dark(css):
 def build_print():
     """One printable HTML with every answer shown, for print/whiteboard-hour.pdf."""
     parts = []
-    for src, _, label in PAGES:
+    for src, _, label in PAGES + [(CODING, "coding.html", "Coding questions")]:
         lines = (ROOT / "src" / src).read_text(encoding="utf-8").splitlines()
         body = render(lines, [], src in VISUAL_PAGES)
         body = body.replace("<details class=\"answer\">", "<details class=\"answer\" open>")
+        body = body.replace("<details class=\"answer reveal\">", "<details class=\"answer reveal\" open>")
         body = body.replace('<div class="answer-body">', '<div class="answer-body"><p class="answer-label">Answer</p>')
-        if src == "questions.md":
-            body = re.sub(r'(<hr>\s*)?<h2 id="(q-[\w-]+|drills)"', r'<h2 class="q" id="\2"', body)
+        if src in ("questions.md", CODING):
+            body = re.sub(r'(<hr>\s*)?<h2 id="([qk]-[\w-]+|drills)"', r'<h2 class="q" id="\2"', body)
         body = re.sub(r'href="(index|components|questions)\.html"', lambda m: f'href="#part-{m.group(1)}"', body)
-        dest_key = dict((p[0], p[1]) for p in PAGES)[src].split(".")[0]
+        dest_key = dict((p[0], p[1]) for p in PAGES).get(src, "coding.html").split(".")[0]
         parts.append(f'<section class="part" id="part-{dest_key}"><p class="part-label">{label}</p>{body}</section>')
     cover = (
         f'<section class="cover"><h1>{SITE}</h1><p>System design for a small business with a big traffic spike.</p>'
         '<ol><li><a href="#part-index">Framework</a>: the six phases in 60 minutes</li>'
         '<li><a href="#part-components">Components</a>: the 23 parts you need, drawn</li>'
-        '<li><a href="#part-questions">Sample questions</a>: 8 prompts with worked answers, then 20 follow-up drills</li></ol></section>'
+        '<li><a href="#part-questions">Sample questions</a>: 8 prompts with worked answers, then 20 follow-up drills</li>'
+        '<li><a href="#part-coding">Coding questions</a>: 8 pairing problems in stages, with answer keys</li></ol></section>'
     )
     css = (ROOT / "style.css").read_text(encoding="utf-8")
     css = strip_dark(css)
@@ -433,11 +444,37 @@ def build_print():
     print("wrote print/whiteboard-hour.html")
 
 
+TAB_JS = """<script>(function(){
+var bs=document.querySelectorAll('.tabs button');
+function open(name){bs.forEach(function(b){var on=b.dataset.tab===name;b.setAttribute('aria-selected',on);
+document.getElementById('tab-'+b.dataset.tab).hidden=!on;});}
+bs.forEach(function(b){b.onclick=function(){open(b.dataset.tab);
+history.replaceState(null,'',b.dataset.tab==='coding'?'#coding':location.pathname);};});
+function fromHash(){var h=decodeURIComponent(location.hash.slice(1));if(!h)return;
+if(h==='coding'){open('coding');return;}
+var t=document.getElementById(h),p=t&&t.closest('.tabpanel');if(p){open(p.id.slice(4));t.scrollIntoView();}}
+fromHash();window.addEventListener('hashchange',fromHash);})();</script>"""
+
+
+def tabbed(sd_body, coding_body):
+    """The Questions page: one h1, then System design | Coding tabs. A #link into either tab opens it."""
+    h1, _, rest = sd_body.partition("</h1>")
+    return (
+        f'{h1}</h1><div class="tabs" role="tablist">'
+        '<button type="button" role="tab" data-tab="sd" aria-selected="true">System design</button>'
+        '<button type="button" role="tab" data-tab="coding" aria-selected="false">Coding</button></div>'
+        f'<section class="tabpanel" id="tab-sd" role="tabpanel">{rest}</section>'
+        f'<section class="tabpanel" id="tab-coding" role="tabpanel" hidden>{coding_body}</section>{TAB_JS}'
+    )
+
+
 def main():
     for src, dest, label in PAGES + EXTRA_PAGES:
         lines = (ROOT / "src" / src).read_text(encoding="utf-8").splitlines()
         toc = []
         body = render(lines, toc, src in VISUAL_PAGES)
+        if src == "questions.md":
+            body = tabbed(body, render((ROOT / "src" / CODING).read_text(encoding="utf-8").splitlines(), []))
         (ROOT / dest).write_text(page(label, dest, body, toc), encoding="utf-8")
         print("wrote", dest)
     build_print()

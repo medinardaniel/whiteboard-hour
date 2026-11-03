@@ -12,7 +12,7 @@
 <header class="top"><a class="brand" href="index.html">Whiteboard Hour</a><nav><a href="index.html">Framework</a><a href="components.html">Components</a><a href="questions.html" aria-current=page>Questions</a></nav></header>
 <main>
 
-<h1 id="sample-questions">Sample questions</h1>
+<h1 id="sample-questions">Sample questions</h1><div class="tabs" role="tablist"><button type="button" role="tab" data-tab="sd" aria-selected="true">System design</button><button type="button" role="tab" data-tab="coding" aria-selected="false">Coding</button></div><section class="tabpanel" id="tab-sd" role="tabpanel">
 <p><strong>TLDR.</strong> Read the one-line prompt, set a 60-minute timer, and answer out loud. Then tap "See answer" and compare. Every answer follows the six phases. The interviewer's replies in Clarify are made up: in a real interview, ask and use whatever numbers you get.</p>
 <p><strong>Questions</strong></p>
 <ol><li><a href="#q-pizza">Pizza shop, game day</a> (limited inventory)</li><li><a href="#q-steps">Weekend step challenge</a> (write-heavy counter)</li><li><a href="#q-cards">Holiday photo cards</a> (job burst)</li><li><a href="#q-tires">Tire shop, first snow</a> (reservations)</li><li><a href="#q-soccer">Youth soccer storm alert</a> (notification fan-out)</li><li><a href="#q-doorbusters">Electronics shop doorbusters</a> (inventory drop with carts)</li><li><a href="#q-marathon">City marathon live tracking</a> (event ingest plus read spike)</li><li><a href="#q-blog">Travel blog goes viral</a> (read spike, happening now)</li></ol>
@@ -274,7 +274,664 @@
 <h3 id="19-the-database-runs-out-of-connections">19. "The database runs out of connections."</h3>
 <details class="answer"><summary><span class="show">See answer</span><span class="hide">Hide answer</span></summary><div class="answer-body"><p>Postgres allows a few hundred connections, and each new API instance opens its own pool, so scaling out the API can exhaust it. Fixes: a connection pooler in transaction mode between the API and the DB, a small fixed pool per instance, and short transactions (no provider calls inside a transaction). Separate pools for checkout and browsing, so browsing can't starve checkout. Alert on connection use above 80%.</p></div></details>
 <h3 id="20-you-get-half-the-time-what-do-you-cut">20. "You get half the time. What do you cut?"</h3>
-<details class="answer"><summary><span class="show">See answer</span><span class="hide">Hide answer</span></summary><div class="answer-body"><p>Keep the invariants and the go-live basics. Cut the features. Keep: the conditional update, idempotency keys, hosted checkout, the CDN, a load test with a pass bar, a pause switch, and a code freeze. Cut: the waiting room (just a flag that shows a "come back later" page), custom dashboards (use the platform's defaults plus 3 alerts), the waitlist, and anything nice to have. Say it out loud: "I'm cutting features, not correctness."</p></div></details>
+<details class="answer"><summary><span class="show">See answer</span><span class="hide">Hide answer</span></summary><div class="answer-body"><p>Keep the invariants and the go-live basics. Cut the features. Keep: the conditional update, idempotency keys, hosted checkout, the CDN, a load test with a pass bar, a pause switch, and a code freeze. Cut: the waiting room (just a flag that shows a "come back later" page), custom dashboards (use the platform's defaults plus 3 alerts), the waitlist, and anything nice to have. Say it out loud: "I'm cutting features, not correctness."</p></div></details></section><section class="tabpanel" id="tab-coding" role="tabpanel" hidden><p><strong>TLDR.</strong> This is a pairing round: a backend problem, built in stages. Set a 45-minute timer. Read the prompt and Stage 1 only. Out loud, restate it, ask your questions, and propose method signatures. Then code Stage 1 with a few quick asserts, and only then open the next stage. The answer key is one good solution, written the way you'd write it in the interview: plain Python, standard library only.</p>
+<p><strong>Questions</strong></p>
+<ol><li><a href="#k-library">Library lending desk</a> (dict state, a queue per key)</li><li><a href="#k-parking">Parking garage</a> (allocation, money in cents)</li><li><a href="#k-leaderboard">Puzzle game leaderboard</a> (top k, rank, ties)</li><li><a href="#k-files">Code editor file system</a> (a tree of dicts)</li><li><a href="#k-config">Config store with history</a> (as-of reads with bisect)</li><li><a href="#k-rooms">Meeting room booking</a> (interval overlap)</li><li><a href="#k-flags">Feature flags</a> (stable percentage rollout)</li><li><a href="#k-evals">Nightly eval results</a> (regressions between runs)</li></ol>
+<p>The quick tests in every answer use this helper:</p>
+<pre><code>def raises(exc, fn, *args, **kwargs):
+    try:
+        fn(*args, **kwargs)
+    except exc:
+        return True
+    return False</code></pre>
+<hr>
+<h2 id="k-library">1. Library lending desk</h2>
+<blockquote>Our neighborhood library tracks loans on paper. Build the service behind a small lending desk app.</blockquote>
+<p><strong>Stage 1.</strong> Members check books out and give them back. A book can't be out to two people at once.</p>
+<details class="answer reveal"><summary>Stage 2</summary><div class="answer-body"><p>Loans are due 14 days after checkout. List the overdue books for a given day. When a book comes back late, charge 25 cents per late day.</p></div></details>
+<details class="answer reveal"><summary>Stage 3</summary><div class="answer-body"><p>A member can place a hold on a book that's out. When it comes back, it goes straight to the first member waiting: checked out to them automatically.</p></div></details>
+<details class="answer reveal"><summary>Stage 4</summary><div class="answer-body"><p>New rule from the librarian: a member can have at most 3 books out at once.</p></div></details>
+<details class="answer"><summary><span class="show">See answer</span><span class="hide">Hide answer</span></summary><div class="answer-body"><h3 id="1-clarify">1. Clarify</h3>
+<p><strong>Questions, with the interviewer's answers</strong></p>
+<ul><li>Can a book have several copies? <em>Treat each copy as its own book id.</em></li><li>How do we represent time? <em>Integer day numbers. The caller passes today.</em></li><li>What if someone returns a book that isn't out? <em>That's an error. Make it clear.</em></li><li>One desk or several? <em>One app for now, but tell me what changes with several.</em></li></ul>
+<h3 id="2-api">2. API</h3>
+<ul><li><code>checkout(book_id, member, today) -&gt; None</code>. Raises <code>AlreadyOut</code>, <code>LimitReached</code>.</li><li><code>give_back(book_id, today) -&gt; int</code>: the late fee in cents. Raises <code>NotOut</code>.</li><li><code>overdue(today) -&gt; list[str]</code>: book ids, sorted.</li><li><code>place_hold(book_id, member) -&gt; int</code>: the member's place in line, from 1.</li></ul>
+<h3 id="3-code">3. Code</h3>
+<pre><code>from collections import defaultdict, deque
+from dataclasses import dataclass
+
+
+class LibraryError(Exception): pass
+class AlreadyOut(LibraryError): pass
+class NotOut(LibraryError): pass
+class LimitReached(LibraryError): pass
+
+
+@dataclass
+class Loan:
+    member: str
+    due: int                                  # a day number
+
+
+class Library:
+    LOAN_DAYS = 14
+    FEE_PER_DAY = 25                          # cents
+    MAX_LOANS = 3
+
+    def __init__(self):
+        self.loans = {}                       # book_id -&gt; Loan
+        self.count = defaultdict(int)         # member -&gt; books out
+        self.holds = defaultdict(deque)       # book_id -&gt; members waiting
+
+    def checkout(self, book_id: str, member: str, today: int) -&gt; None:
+        if book_id in self.loans:
+            raise AlreadyOut(book_id)
+        if self.count[member] &gt;= self.MAX_LOANS:
+            raise LimitReached(member)
+        self.loans[book_id] = Loan(member, today + self.LOAN_DAYS)
+        self.count[member] += 1
+
+    def give_back(self, book_id: str, today: int) -&gt; int:
+        loan = self.loans.pop(book_id, None)
+        if loan is None:
+            raise NotOut(book_id)
+        self.count[loan.member] -= 1
+        fee = max(0, today - loan.due) * self.FEE_PER_DAY
+        self._fill_hold(book_id, today)
+        return fee
+
+    def overdue(self, today: int) -&gt; list[str]:
+        return sorted(b for b, loan in self.loans.items() if loan.due &lt; today)
+
+    def place_hold(self, book_id: str, member: str) -&gt; int:
+        if book_id not in self.loans:
+            raise NotOut(book_id)             # it&#x27;s on the shelf: just check it out
+        line = self.holds[book_id]
+        if member not in line:
+            line.append(member)
+        return list(line).index(member) + 1
+
+    def _fill_hold(self, book_id: str, today: int) -&gt; None:
+        line = self.holds.get(book_id)
+        while line:
+            member = line.popleft()
+            try:
+                self.checkout(book_id, member, today)
+                return
+            except LimitReached:
+                continue                      # at their limit: skip to the next member</code></pre>
+<h3 id="4-quick-tests">4. Quick tests</h3>
+<pre><code>lib = Library()
+lib.checkout(&quot;b1&quot;, &quot;ana&quot;, today=0)
+assert raises(AlreadyOut, lib.checkout, &quot;b1&quot;, &quot;bo&quot;, today=0)
+assert lib.overdue(today=15) == [&quot;b1&quot;]
+assert lib.place_hold(&quot;b1&quot;, &quot;bo&quot;) == 1
+assert lib.give_back(&quot;b1&quot;, today=16) == 50            # 2 days late
+assert lib.loans[&quot;b1&quot;].member == &quot;bo&quot;                  # the hold was filled
+for b in (&quot;x&quot;, &quot;y&quot;, &quot;z&quot;):
+    lib.checkout(b, &quot;cy&quot;, today=0)
+assert raises(LimitReached, lib.checkout, &quot;w&quot;, &quot;cy&quot;, today=0)
+assert raises(NotOut, lib.give_back, &quot;w&quot;, today=0)</code></pre>
+<h3 id="5-follow-ups">5. Follow-ups</h3>
+<ul><li><strong>Why a dict?</strong> Checkout and give back are lookups by book id: constant time, and a key can't repeat, so "one loan per book" holds by construction.</li><li><strong>Complexity:</strong> checkout and give back are O(1). <code>overdue</code> scans and sorts, O(n log n). If it's called often, keep a heap keyed by due date.</li><li><strong>Two desks at once:</strong> both pass the <code>in</code> check, then both write. Hold one <code>threading.Lock</code> around the check and the write.</li><li><strong>A decision to say out loud:</strong> a member at their limit loses their hold. The alternative is to keep them in line and try the next member.</li><li><strong>How it evolves:</strong> a loans table in Postgres with a unique index on <code>book_id</code> where <code>returned_at is null</code>. The database then enforces "one loan per book" for every desk.</li></ul></div></details>
+<hr>
+<h2 id="k-parking">2. Parking garage</h2>
+<blockquote>A parking garage wants to replace its ticket machine. Build the service that assigns spots and charges at the exit.</blockquote>
+<p><strong>Stage 1.</strong> The garage has small, medium and large spots, a set number of each. A car arrives with a plate and a size: give it a spot of that size, or say the garage is full. Free the spot when the car leaves.</p>
+<details class="answer reveal"><summary>Stage 2</summary><div class="answer-body"><p>If its size is full, a car can take a bigger spot (small, then medium, then large). Never a smaller one.</p></div></details>
+<details class="answer reveal"><summary>Stage 3</summary><div class="answer-body"><p>Charge at the exit: $3 per started hour, the first 15 minutes free, capped at $20 a visit. Times are minutes, passed in.</p></div></details>
+<details class="answer reveal"><summary>Stage 4</summary><div class="answer-body"><p>The display at the entrance shows how many spots of each size are free. It refreshes every second, so make it cheap.</p></div></details>
+<details class="answer"><summary><span class="show">See answer</span><span class="hide">Hide answer</span></summary><div class="answer-body"><h3 id="1-clarify">1. Clarify</h3>
+<p><strong>Questions, with the interviewer's answers</strong></p>
+<ul><li>Do spots have ids? <em>Yes, like S1, M2. The ticket shows it.</em></li><li>Can the same plate arrive twice? <em>Not while it's inside. That's an error.</em></li><li>Which spot when several are free? <em>Any spot of the right size.</em></li><li>Money format? <em>Return cents as an integer.</em></li></ul>
+<h3 id="2-api">2. API</h3>
+<ul><li><code>Garage(counts: dict[str, int])</code></li><li><code>arrive(plate, size, now) -&gt; str</code>: the spot id. Raises <code>GarageFull</code>, <code>AlreadyParked</code>.</li><li><code>leave(plate, now) -&gt; int</code>: the fee in cents. Raises <code>UnknownCar</code>.</li><li><code>free_count() -&gt; dict[str, int]</code></li></ul>
+<h3 id="3-code">3. Code</h3>
+<pre><code>SIZES = [&quot;small&quot;, &quot;medium&quot;, &quot;large&quot;]
+
+
+class GarageError(Exception): pass
+class GarageFull(GarageError): pass
+class AlreadyParked(GarageError): pass
+class UnknownCar(GarageError): pass
+
+
+class Garage:
+    RATE = 300                                # cents per started hour
+    FREE_MINUTES = 15
+    CAP = 2000                                # cents per visit
+
+    def __init__(self, counts: dict[str, int]):
+        # free spot ids per size, used as a stack: pop() gives S1 first
+        self.free = {s: [f&quot;{s[0].upper()}{i}&quot; for i in range(counts.get(s, 0), 0, -1)] for s in SIZES}
+        self.parked = {}                      # plate -&gt; (size used, spot, arrived)
+
+    def arrive(self, plate: str, size: str, now: int) -&gt; str:
+        if size not in SIZES:
+            raise ValueError(size)
+        if plate in self.parked:
+            raise AlreadyParked(plate)
+        for s in SIZES[SIZES.index(size):]:   # its own size first, then bigger
+            if self.free[s]:
+                spot = self.free[s].pop()
+                self.parked[plate] = (s, spot, now)
+                return spot
+        raise GarageFull(size)
+
+    def leave(self, plate: str, now: int) -&gt; int:
+        if plate not in self.parked:
+            raise UnknownCar(plate)
+        size, spot, arrived = self.parked.pop(plate)
+        self.free[size].append(spot)
+        return self.fee(now - arrived)
+
+    def fee(self, minutes: int) -&gt; int:
+        if minutes &lt;= self.FREE_MINUTES:
+            return 0
+        hours = -(-minutes // 60)             # ceiling division
+        return min(self.CAP, hours * self.RATE)
+
+    def free_count(self) -&gt; dict[str, int]:
+        return {s: len(self.free[s]) for s in SIZES}</code></pre>
+<h3 id="4-quick-tests">4. Quick tests</h3>
+<pre><code>g = Garage({&quot;small&quot;: 1, &quot;medium&quot;: 1, &quot;large&quot;: 0})
+assert g.arrive(&quot;A&quot;, &quot;small&quot;, 0) == &quot;S1&quot;
+assert g.arrive(&quot;B&quot;, &quot;small&quot;, 0) == &quot;M1&quot;               # moved up a size
+assert raises(GarageFull, g.arrive, &quot;C&quot;, &quot;small&quot;, 0)
+assert raises(AlreadyParked, g.arrive, &quot;A&quot;, &quot;small&quot;, 0)
+assert g.leave(&quot;A&quot;, 10) == 0                            # under 15 minutes
+assert g.free_count() == {&quot;small&quot;: 1, &quot;medium&quot;: 0, &quot;large&quot;: 0}
+assert g.leave(&quot;B&quot;, 61) == 600                          # 2 started hours
+assert g.fee(60 * 24) == 2000                           # capped
+assert raises(UnknownCar, g.leave, &quot;B&quot;, 70)</code></pre>
+<h3 id="5-follow-ups">5. Follow-ups</h3>
+<ul><li><strong>Why a list as a stack?</strong> <code>pop()</code> and <code>append()</code> at the end are O(1). If they want the lowest-numbered free spot, use a heap (<code>heapq</code>) instead.</li><li><strong>Complexity:</strong> everything is O(1) (three sizes at most). <code>free_count</code> is just three <code>len</code> calls, so the display can call it every second.</li><li><strong>Money:</strong> integer cents, never floats. <code>0.1 + 0.2 != 0.3</code>.</li><li><strong>Two gates at once:</strong> two cars can grab the last spot. Lock around "find a spot and take it".</li><li><strong>How it evolves:</strong> a spots table, taking a spot with one conditional update (<code>UPDATE ... WHERE taken = false</code>), so two gates can't take the same spot.</li></ul></div></details>
+<hr>
+<h2 id="k-leaderboard">3. Puzzle game leaderboard</h2>
+<blockquote>We run a weekly puzzle game. Build the leaderboard service.</blockquote>
+<p><strong>Stage 1.</strong> Record a player's score for a game. A player's total is the sum of their scores this week. Get a player's total.</p>
+<details class="answer reveal"><summary>Stage 2</summary><div class="answer-body"><p>Show the top k players by total, highest first. Ties go to the name that comes first alphabetically.</p></div></details>
+<details class="answer reveal"><summary>Stage 3</summary><div class="answer-body"><p>Show any player's rank (1 is the best), with the same tie rule.</p></div></details>
+<details class="answer reveal"><summary>Stage 4</summary><div class="answer-body"><p>Start a new week: every total goes back to zero, but keep last week's top 3 and return them.</p></div></details>
+<details class="answer"><summary><span class="show">See answer</span><span class="hide">Hide answer</span></summary><div class="answer-body"><h3 id="1-clarify">1. Clarify</h3>
+<p><strong>Questions, with the interviewer's answers</strong></p>
+<ul><li>Can scores be negative? <em>No. Reject them.</em></li><li>A player we've never seen? <em>Asking for their total is an error.</em></li><li>How many players? <em>A few thousand. Rank is shown on every profile view.</em></li><li>Are ties common? <em>Yes, scores are small integers.</em></li></ul>
+<h3 id="2-api">2. API</h3>
+<ul><li><code>add_score(player, score) -&gt; int</code>: the new total.</li><li><code>total(player) -&gt; int</code>. Raises <code>UnknownPlayer</code>.</li><li><code>top(k) -&gt; list[tuple[str, int]]</code></li><li><code>rank(player) -&gt; int</code></li><li><code>new_week() -&gt; list[tuple[str, int]]</code>: last week's top 3.</li></ul>
+<h3 id="3-code">3. Code</h3>
+<pre><code>import heapq
+from collections import defaultdict
+
+
+class UnknownPlayer(Exception): pass
+
+
+class Leaderboard:
+    def __init__(self):
+        self.totals = defaultdict(int)        # player -&gt; total this week
+        self.history = []                     # each past week&#x27;s top 3
+
+    def add_score(self, player: str, score: int) -&gt; int:
+        if score &lt; 0:
+            raise ValueError(&quot;score must be &gt;= 0&quot;)
+        self.totals[player] += score
+        return self.totals[player]
+
+    def total(self, player: str) -&gt; int:
+        if player not in self.totals:
+            raise UnknownPlayer(player)
+        return self.totals[player]
+
+    @staticmethod
+    def _order(item):
+        player, total = item
+        return (-total, player)               # highest total first, then name A to Z
+
+    def top(self, k: int) -&gt; list[tuple[str, int]]:
+        return heapq.nsmallest(k, self.totals.items(), key=self._order)
+
+    def rank(self, player: str) -&gt; int:
+        mine = self._order((player, self.total(player)))
+        return 1 + sum(self._order(item) &lt; mine for item in self.totals.items())
+
+    def new_week(self) -&gt; list[tuple[str, int]]:
+        podium = self.top(3)
+        self.history.append(podium)
+        self.totals.clear()
+        return podium</code></pre>
+<h3 id="4-quick-tests">4. Quick tests</h3>
+<pre><code>lb = Leaderboard()
+lb.add_score(&quot;cy&quot;, 5); lb.add_score(&quot;ana&quot;, 7); lb.add_score(&quot;bo&quot;, 7)
+assert lb.add_score(&quot;cy&quot;, 4) == 9
+assert lb.top(2) == [(&quot;cy&quot;, 9), (&quot;ana&quot;, 7)]
+assert lb.rank(&quot;bo&quot;) == 3                               # ties with ana, loses on name
+assert raises(ValueError, lb.add_score, &quot;cy&quot;, -1)
+assert lb.new_week() == [(&quot;cy&quot;, 9), (&quot;ana&quot;, 7), (&quot;bo&quot;, 7)]
+assert raises(UnknownPlayer, lb.total, &quot;cy&quot;)</code></pre>
+<h3 id="5-follow-ups">5. Follow-ups</h3>
+<ul><li><strong>One sort key for both:</strong> <code>(-total, name)</code> gives "highest first, ties by name" for top and rank, so they can't disagree.</li><li><strong>Complexity:</strong> <code>top(k)</code> is O(n log k) with a heap. <code>rank</code> is O(n). Fine for thousands of players.</li><li><strong>If rank gets hot:</strong> keep a sorted list of <code>(-total, name)</code> and use <code>bisect</code> (O(log n) to find, O(n) to update), or in production a Redis sorted set (<code>ZINCRBY</code>, <code>ZREVRANK</code>), which is built for exactly this.</li><li><strong>Two threads:</strong> <code>totals[p] += s</code> is a read, then a write. Two updates can lose one. Lock it.</li></ul></div></details>
+<hr>
+<h2 id="k-files">4. Code editor file system</h2>
+<blockquote>Build an in-memory file system for a web-based code editor.</blockquote>
+<p><strong>Stage 1.</strong> <code>mkdir(path)</code> creates a folder and any missing parents. <code>write(path, text)</code> creates or overwrites a file; its folder must already exist. <code>read(path)</code> returns the text.</p>
+<details class="answer reveal"><summary>Stage 2</summary><div class="answer-body"><p><code>ls(path)</code>: the names in a folder, sorted. On a file, just the file's name.</p></div></details>
+<details class="answer reveal"><summary>Stage 3</summary><div class="answer-body"><p><code>size(path)</code>: a file's size is the length of its text. A folder's size is the total of everything under it.</p></div></details>
+<details class="answer reveal"><summary>Stage 4</summary><div class="answer-body"><p><code>move(src, dst)</code> for files and folders. Moving a folder into itself is an error.</p></div></details>
+<details class="answer"><summary><span class="show">See answer</span><span class="hide">Hide answer</span></summary><div class="answer-body"><h3 id="1-clarify">1. Clarify</h3>
+<p><strong>Questions, with the interviewer's answers</strong></p>
+<ul><li>Path format? *Absolute, slash-separated, like <code>/src/app/main.py</code>.*</li><li>What if the parent folder is missing on write? <em>Error. Only mkdir creates parents.</em></li><li>Can a file and a folder share a name in one folder? <em>No.</em></li><li>How big? <em>Thousands of files. Paths are short.</em></li></ul>
+<h3 id="2-api">2. API</h3>
+<ul><li><code>mkdir(path)</code>, <code>write(path, text)</code>, <code>read(path) -&gt; str</code></li><li><code>ls(path) -&gt; list[str]</code>, <code>size(path) -&gt; int</code>, <code>move(src, dst)</code></li><li>Errors: <code>NotFound</code>, <code>NotADir</code>, <code>NotAFile</code>, <code>Exists</code>, <code>BadMove</code>.</li></ul>
+<h3 id="3-code">3. Code</h3>
+<pre><code>class FSError(Exception): pass
+class NotFound(FSError): pass
+class NotADir(FSError): pass
+class NotAFile(FSError): pass
+class Exists(FSError): pass
+class BadMove(FSError): pass
+
+
+class FileSystem:
+    def __init__(self):
+        self.root = {}                        # a folder is a dict of name -&gt; child; a file is a str
+
+    @staticmethod
+    def _parts(path: str) -&gt; list[str]:
+        return [p for p in path.split(&quot;/&quot;) if p]
+
+    def _get(self, parts: list[str]):
+        node = self.root
+        for p in parts:
+            if not isinstance(node, dict) or p not in node:
+                raise NotFound(&quot;/&quot; + &quot;/&quot;.join(parts))
+            node = node[p]
+        return node
+
+    def _dir(self, parts: list[str]) -&gt; dict:
+        node = self._get(parts)
+        if not isinstance(node, dict):
+            raise NotADir(&quot;/&quot; + &quot;/&quot;.join(parts))
+        return node
+
+    def mkdir(self, path: str) -&gt; None:
+        node = self.root
+        for p in self._parts(path):
+            node = node.setdefault(p, {})
+            if not isinstance(node, dict):
+                raise NotADir(p)
+
+    def write(self, path: str, text: str) -&gt; None:
+        *folder, name = self._parts(path)
+        parent = self._dir(folder)
+        if isinstance(parent.get(name), dict):
+            raise Exists(path)                # a folder already has that name
+        parent[name] = text
+
+    def read(self, path: str) -&gt; str:
+        node = self._get(self._parts(path))
+        if isinstance(node, dict):
+            raise NotAFile(path)
+        return node
+
+    def ls(self, path: str) -&gt; list[str]:
+        parts = self._parts(path)
+        node = self._get(parts)
+        return sorted(node) if isinstance(node, dict) else [parts[-1]]
+
+    def size(self, path: str) -&gt; int:
+        def total(node):
+            return len(node) if isinstance(node, str) else sum(total(c) for c in node.values())
+        return total(self._get(self._parts(path)))
+
+    def move(self, src: str, dst: str) -&gt; None:
+        s, d = self._parts(src), self._parts(dst)
+        if d[:len(s)] == s:
+            raise BadMove(f&quot;{dst} is inside {src}&quot;)
+        node = self._get(s)
+        *dst_folder, dst_name = d
+        dest = self._dir(dst_folder)
+        if dst_name in dest:
+            raise Exists(dst)
+        *src_folder, src_name = s
+        del self._dir(src_folder)[src_name]
+        dest[dst_name] = node</code></pre>
+<h3 id="4-quick-tests">4. Quick tests</h3>
+<pre><code>fs = FileSystem()
+fs.mkdir(&quot;/src/app&quot;)
+fs.write(&quot;/src/app/main.py&quot;, &quot;print(1)&quot;)
+fs.write(&quot;/src/README&quot;, &quot;hi&quot;)
+assert fs.read(&quot;/src/app/main.py&quot;) == &quot;print(1)&quot;
+assert fs.ls(&quot;/src&quot;) == [&quot;README&quot;, &quot;app&quot;]
+assert fs.ls(&quot;/src/README&quot;) == [&quot;README&quot;]
+assert fs.size(&quot;/src&quot;) == 10
+assert raises(NotFound, fs.write, &quot;/nope/x.py&quot;, &quot;&quot;)
+assert raises(NotAFile, fs.read, &quot;/src&quot;)
+fs.move(&quot;/src/app&quot;, &quot;/app&quot;)
+assert fs.ls(&quot;/&quot;) == [&quot;app&quot;, &quot;src&quot;]
+assert raises(BadMove, fs.move, &quot;/src&quot;, &quot;/src/inner&quot;)</code></pre>
+<h3 id="5-follow-ups">5. Follow-ups</h3>
+<ul><li><strong>Why nested dicts?</strong> Each step down a path is one O(1) lookup, so every operation is O(depth), plus O(subtree) for <code>size</code> and O(k log k) for <code>ls</code>.</li><li><strong>If size gets hot:</strong> store a size on each folder and update every ancestor on write and move. That makes writes O(depth) and size O(1).</li><li><strong>Two threads:</strong> one lock for the whole tree is simple and correct. Per-folder locks are faster, but <code>move</code> takes two of them, so always lock in the same order to avoid deadlock.</li><li><strong>How it evolves:</strong> file contents go to object storage; the tree becomes a table <code>(id, parent_id, name)</code> with a unique index on <code>(parent_id, name)</code>. Then a move is one row update.</li></ul></div></details>
+<hr>
+<h2 id="k-config">5. Config store with history</h2>
+<blockquote>Our services read settings, like timeouts and model names, from a config store. When something breaks, we need to know what a setting was at any past moment.</blockquote>
+<p><strong>Stage 1.</strong> <code>set(key, value, ts)</code> and <code>get(key)</code> for the latest value. For each key, timestamps only go up.</p>
+<details class="answer reveal"><summary>Stage 2</summary><div class="answer-body"><p><code>get(key, at=ts)</code>: the value as of that time, meaning the last set at or before it. Before the first set, the key is missing.</p></div></details>
+<details class="answer reveal"><summary>Stage 3</summary><div class="answer-body"><p><code>delete(key, ts)</code>: from then on the key is missing, but its history before that stays readable.</p></div></details>
+<details class="answer reveal"><summary>Stage 4</summary><div class="answer-body"><p><code>changes(since, until)</code>: every key whose value at <code>until</code> differs from its value at <code>since</code>, sorted.</p></div></details>
+<details class="answer"><summary><span class="show">See answer</span><span class="hide">Hide answer</span></summary><div class="answer-body"><h3 id="1-clarify">1. Clarify</h3>
+<p><strong>Questions, with the interviewer's answers</strong></p>
+<ul><li>What does "missing" return? <em>None by default. Let callers pass a default.</em></li><li>What if a write comes with an older timestamp? <em>Reject it. It's a bug upstream.</em></li><li>Reads vs writes? <em>Reads all day, a few writes an hour. History grows forever.</em></li><li>What can a value be? <em>Anything: numbers, strings, None.</em></li></ul>
+<h3 id="2-api">2. API</h3>
+<ul><li><code>set(key, value, ts)</code>, <code>delete(key, ts)</code>. Raise <code>StaleWrite</code> on an old timestamp.</li><li><code>get(key, at=None, default=None)</code></li><li><code>changes(since, until) -&gt; list[str]</code></li></ul>
+<h3 id="3-code">3. Code</h3>
+<pre><code>from bisect import bisect_right
+from collections import defaultdict
+
+
+class StaleWrite(Exception): pass
+
+
+_DELETED = object()                           # marks a delete in the history
+
+
+class ConfigStore:
+    def __init__(self):
+        self.times = defaultdict(list)        # key -&gt; [ts, ...], increasing
+        self.values = defaultdict(list)       # key -&gt; [value, ...], same order
+
+    def set(self, key: str, value, ts: int) -&gt; None:
+        self._append(key, value, ts)
+
+    def delete(self, key: str, ts: int) -&gt; None:
+        self._append(key, _DELETED, ts)
+
+    def _append(self, key: str, value, ts: int) -&gt; None:
+        times = self.times[key]
+        if times and ts &lt;= times[-1]:
+            raise StaleWrite(f&quot;{key}: {ts} &lt;= {times[-1]}&quot;)
+        times.append(ts)
+        self.values[key].append(value)
+
+    def get(self, key: str, at: int | None = None, default=None):
+        times = self.times.get(key)
+        if not times:
+            return default
+        i = len(times) if at is None else bisect_right(times, at)
+        if i == 0:
+            return default                    # asked before the first set
+        value = self.values[key][i - 1]
+        return default if value is _DELETED else value
+
+    def changes(self, since: int, until: int) -&gt; list[str]:
+        missing = object()
+        return sorted(k for k in self.times
+                      if self.get(k, since, missing) != self.get(k, until, missing))</code></pre>
+<h3 id="4-quick-tests">4. Quick tests</h3>
+<pre><code>c = ConfigStore()
+c.set(&quot;timeout&quot;, 30, ts=10)
+c.set(&quot;timeout&quot;, 45, ts=20)
+c.set(&quot;model&quot;, &quot;small&quot;, ts=15)
+assert c.get(&quot;timeout&quot;) == 45
+assert c.get(&quot;timeout&quot;, at=19) == 30
+assert c.get(&quot;timeout&quot;, at=5) is None
+c.delete(&quot;model&quot;, ts=25)
+assert c.get(&quot;model&quot;) is None and c.get(&quot;model&quot;, at=24) == &quot;small&quot;
+assert c.changes(since=16, until=30) == [&quot;model&quot;, &quot;timeout&quot;]
+assert c.changes(since=21, until=24) == []
+assert raises(StaleWrite, c.set, &quot;timeout&quot;, 1, 20)</code></pre>
+<h3 id="5-follow-ups">5. Follow-ups</h3>
+<ul><li><strong>Why bisect?</strong> Timestamps arrive in order, so each key's list is already sorted. "As of" is a binary search: O(log n). Writes are O(1) appends.</li><li><strong>Why a sentinel for delete?</strong> None is a legal value. A private <code>object()</code> can't be confused with anything a caller stores.</li><li><strong>Complexity of changes:</strong> O(K log n) for K keys. Fine for config, which has hundreds of keys.</li><li><strong>Two threads:</strong> the stale check and the append must happen together. Lock per key, or one lock.</li><li><strong>How it evolves:</strong> an append-only table <code>(key, ts, value)</code> with an index on <code>(key, ts)</code>. "As of" becomes <code>WHERE key = ? AND ts &lt;= ? ORDER BY ts DESC LIMIT 1</code>.</li></ul></div></details>
+<hr>
+<h2 id="k-rooms">6. Meeting room booking</h2>
+<blockquote>A coworking space wants online booking for its meeting rooms.</blockquote>
+<p><strong>Stage 1.</strong> <code>book(room, start, end)</code> returns a booking id, or rejects the booking if it overlaps another one in that room. Times are minutes, and the end is exclusive, so 9:00 to 10:00 and 10:00 to 11:00 both fit.</p>
+<details class="answer reveal"><summary>Stage 2</summary><div class="answer-body"><p><code>cancel(booking_id)</code>.</p></div></details>
+<details class="answer reveal"><summary>Stage 3</summary><div class="answer-body"><p><code>free_rooms(start, end)</code>: the rooms that are free for the whole range, sorted.</p></div></details>
+<details class="answer reveal"><summary>Stage 4</summary><div class="answer-body"><p>Rooms have a capacity. <code>book_any(people, start, end)</code> books the smallest free room that fits everyone.</p></div></details>
+<details class="answer"><summary><span class="show">See answer</span><span class="hide">Hide answer</span></summary><div class="answer-body"><h3 id="1-clarify">1. Clarify</h3>
+<p><strong>Questions, with the interviewer's answers</strong></p>
+<ul><li>Is touching allowed (one ends at 10:00, the next starts at 10:00)? <em>Yes.</em></li><li>Unknown room or start after end? <em>Errors.</em></li><li>How many bookings? <em>Tens of rooms, a few hundred bookings per room.</em></li><li>Ties in book_any? <em>Smallest capacity, then room name.</em></li></ul>
+<h3 id="2-api">2. API</h3>
+<ul><li><code>Rooms(capacity: dict[str, int])</code></li><li><code>book(room, start, end) -&gt; int</code>. Raises <code>Conflict</code>.</li><li><code>cancel(booking_id)</code>. Raises <code>UnknownBooking</code>.</li><li><code>free_rooms(start, end) -&gt; list[str]</code></li><li><code>book_any(people, start, end) -&gt; tuple[str, int]</code>. Raises <code>NoRoom</code>.</li></ul>
+<h3 id="3-code">3. Code</h3>
+<pre><code>from bisect import bisect_left, insort
+from itertools import count
+
+
+class BookingError(Exception): pass
+class Conflict(BookingError): pass
+class UnknownBooking(BookingError): pass
+class NoRoom(BookingError): pass
+
+
+class Rooms:
+    def __init__(self, capacity: dict[str, int]):
+        self.capacity = capacity
+        self.slots = {r: [] for r in capacity}    # room -&gt; sorted [(start, end, id)]
+        self.by_id = {}                           # id -&gt; (room, start, end)
+        self.next_id = count(1)
+
+    def _free(self, room: str, start: int, end: int) -&gt; bool:
+        s = self.slots[room]
+        i = bisect_left(s, (start,))              # first booking starting at or after start
+        if i &lt; len(s) and s[i][0] &lt; end:          # it starts before we end
+            return False
+        if i &gt; 0 and s[i - 1][1] &gt; start:         # the one before ends after we start
+            return False
+        return True
+
+    def book(self, room: str, start: int, end: int) -&gt; int:
+        if room not in self.slots:
+            raise KeyError(room)
+        if start &gt;= end:
+            raise ValueError(&quot;start must be before end&quot;)
+        if not self._free(room, start, end):
+            raise Conflict(room)
+        bid = next(self.next_id)
+        insort(self.slots[room], (start, end, bid))
+        self.by_id[bid] = (room, start, end)
+        return bid
+
+    def cancel(self, bid: int) -&gt; None:
+        if bid not in self.by_id:
+            raise UnknownBooking(bid)
+        room, start, end = self.by_id.pop(bid)
+        self.slots[room].remove((start, end, bid))
+
+    def free_rooms(self, start: int, end: int) -&gt; list[str]:
+        return sorted(r for r in self.slots if self._free(r, start, end))
+
+    def book_any(self, people: int, start: int, end: int) -&gt; tuple[str, int]:
+        fits = [r for r in self.free_rooms(start, end) if self.capacity[r] &gt;= people]
+        if not fits:
+            raise NoRoom(people)
+        room = min(fits, key=lambda r: (self.capacity[r], r))
+        return room, self.book(room, start, end)</code></pre>
+<h3 id="4-quick-tests">4. Quick tests</h3>
+<pre><code>r = Rooms({&quot;oak&quot;: 4, &quot;elm&quot;: 10})
+a = r.book(&quot;oak&quot;, 540, 600)
+assert r.book(&quot;oak&quot;, 600, 660)                          # back to back is fine
+assert raises(Conflict, r.book, &quot;oak&quot;, 570, 630)
+assert raises(Conflict, r.book, &quot;oak&quot;, 500, 550)
+assert r.free_rooms(550, 580) == [&quot;elm&quot;]
+r.cancel(a)
+assert r.free_rooms(550, 580) == [&quot;elm&quot;, &quot;oak&quot;]
+assert r.book_any(3, 550, 580)[0] == &quot;oak&quot;              # smallest that fits
+assert r.book_any(3, 550, 580)[0] == &quot;elm&quot;
+assert raises(NoRoom, r.book_any, 3, 550, 580)
+assert raises(UnknownBooking, r.cancel, a)</code></pre>
+<h3 id="5-follow-ups">5. Follow-ups</h3>
+<ul><li><strong>Why keep bookings sorted?</strong> A new booking can only clash with its two neighbors, so the check is one binary search, O(log n), instead of a scan of every booking.</li><li><strong>Complexity:</strong> <code>book</code> is O(log n) to check plus O(n) to insert into the list (a fast memory shift). <code>free_rooms</code> is O(R log n).</li><li><strong>Two people, same slot:</strong> both pass <code>_free</code>, both insert. Lock per room around check and insert.</li><li><strong>How it evolves:</strong> Postgres can enforce this itself with an exclusion constraint: <code>EXCLUDE USING gist (room WITH =, tsrange(start_at, end_at) WITH &amp;&amp;)</code>. Then no two overlapping rows can ever commit.</li></ul></div></details>
+<hr>
+<h2 id="k-flags">7. Feature flags</h2>
+<blockquote>Our team ships features behind flags. Build the flag service our backend checks on every request.</blockquote>
+<p><strong>Stage 1.</strong> Create a flag, turn it on or off for everyone, and check <code>is_on(flag, user)</code>. An unknown flag is an error.</p>
+<details class="answer reveal"><summary>Stage 2</summary><div class="answer-body"><p>Allow lists: turn a flag on for specific users, even while it's off for everyone else.</p></div></details>
+<details class="answer reveal"><summary>Stage 3</summary><div class="answer-body"><p>Percentage rollout: on for N% of users. A user must always get the same answer, and raising N from 10 to 20 must keep the first 10% on.</p></div></details>
+<details class="answer reveal"><summary>Stage 4</summary><div class="answer-body"><p>A user reported a bug in the new feature. Add a deny list that wins over everything else.</p></div></details>
+<details class="answer"><summary><span class="show">See answer</span><span class="hide">Hide answer</span></summary><div class="answer-body"><h3 id="1-clarify">1. Clarify</h3>
+<p><strong>Questions, with the interviewer's answers</strong></p>
+<ul><li>How often is is_on called? <em>On every request. It has to be fast.</em></li><li>What's a user? <em>A string id.</em></li><li>Does "always the same answer" hold across restarts and servers? <em>Yes. Every server must agree.</em></li><li>Percent granularity? <em>Whole numbers, 0 to 100.</em></li></ul>
+<h3 id="2-api">2. API</h3>
+<ul><li><code>create(name)</code>, <code>set_on(name, on)</code>, <code>allow(name, user)</code>, <code>deny(name, user)</code>, <code>rollout(name, percent)</code></li><li><code>is_on(name, user) -&gt; bool</code>. Raises <code>UnknownFlag</code>.</li></ul>
+<h3 id="3-code">3. Code</h3>
+<pre><code>import hashlib
+from dataclasses import dataclass, field
+
+
+class UnknownFlag(Exception): pass
+
+
+@dataclass
+class Flag:
+    on: bool = False
+    percent: int = 0                          # 0 to 100
+    allow: set = field(default_factory=set)
+    deny: set = field(default_factory=set)
+
+
+def bucket(flag: str, user: str) -&gt; int:
+    &quot;&quot;&quot;A stable number from 0 to 99 for each (flag, user). Not hash(): it changes between runs.&quot;&quot;&quot;
+    digest = hashlib.sha256(f&quot;{flag}:{user}&quot;.encode()).digest()
+    return int.from_bytes(digest[:8], &quot;big&quot;) % 100
+
+
+class Flags:
+    def __init__(self):
+        self.flags = {}                       # name -&gt; Flag
+
+    def create(self, name: str) -&gt; None:
+        if name in self.flags:
+            raise ValueError(f&quot;{name} already exists&quot;)
+        self.flags[name] = Flag()
+
+    def _get(self, name: str) -&gt; Flag:
+        if name not in self.flags:
+            raise UnknownFlag(name)
+        return self.flags[name]
+
+    def set_on(self, name: str, on: bool) -&gt; None:
+        self._get(name).on = on
+
+    def allow(self, name: str, user: str) -&gt; None:
+        self._get(name).allow.add(user)
+
+    def deny(self, name: str, user: str) -&gt; None:
+        self._get(name).deny.add(user)
+
+    def rollout(self, name: str, percent: int) -&gt; None:
+        if not 0 &lt;= percent &lt;= 100:
+            raise ValueError(percent)
+        self._get(name).percent = percent
+
+    def is_on(self, name: str, user: str) -&gt; bool:
+        f = self._get(name)
+        if user in f.deny:
+            return False
+        if f.on or user in f.allow:
+            return True
+        return bucket(name, user) &lt; f.percent</code></pre>
+<h3 id="4-quick-tests">4. Quick tests</h3>
+<pre><code>fl = Flags()
+fl.create(&quot;new_ui&quot;)
+assert not fl.is_on(&quot;new_ui&quot;, &quot;u1&quot;)
+fl.allow(&quot;new_ui&quot;, &quot;u1&quot;)
+assert fl.is_on(&quot;new_ui&quot;, &quot;u1&quot;) and not fl.is_on(&quot;new_ui&quot;, &quot;u2&quot;)
+users = [f&quot;u{i}&quot; for i in range(1000)]
+fl.rollout(&quot;new_ui&quot;, 10)
+ten = {u for u in users if fl.is_on(&quot;new_ui&quot;, u)}
+fl.rollout(&quot;new_ui&quot;, 20)
+twenty = {u for u in users if fl.is_on(&quot;new_ui&quot;, u)}
+assert ten &lt;= twenty                                    # the first 10% stay on
+assert 50 &lt; len(ten) &lt; 160 and 150 &lt; len(twenty) &lt; 260
+fl.deny(&quot;new_ui&quot;, &quot;u1&quot;); fl.set_on(&quot;new_ui&quot;, True)
+assert not fl.is_on(&quot;new_ui&quot;, &quot;u1&quot;) and fl.is_on(&quot;new_ui&quot;, &quot;u2&quot;)
+assert raises(UnknownFlag, fl.is_on, &quot;nope&quot;, &quot;u1&quot;)</code></pre>
+<h3 id="5-follow-ups">5. Follow-ups</h3>
+<ul><li><strong>Why a hash bucket?</strong> It's stable with no stored state: any server computes the same bucket. Raising the percent only adds users, because a user's bucket never changes.</li><li><strong>Why put the flag name in the hash?</strong> Otherwise the same 10% of users land in every rollout.</li><li><strong>Complexity:</strong> <code>is_on</code> is O(1): two set lookups and one hash. No network call on the request path.</li><li><strong>Many servers:</strong> each server keeps flags in memory and refreshes every few seconds, or gets pushed changes. Writes replace a whole <code>Flag</code> object, so a reader never sees half an update.</li><li><strong>How it evolves:</strong> rules on user attributes (country, plan) checked in order, with the percentage as the last rule.</li></ul></div></details>
+<hr>
+<h2 id="k-evals">8. Nightly eval results</h2>
+<blockquote>Our team runs a model against a fixed set of test cases every night. Build the service that stores the results and tells us whether the new model got worse.</blockquote>
+<p><strong>Stage 1.</strong> <code>record(run_id, case_id, passed)</code>. <code>summary(run_id)</code> returns how many passed, the total, and the pass rate.</p>
+<details class="answer reveal"><summary>Stage 2</summary><div class="answer-body"><p>Some cases are retried within a run. The last result for a case counts, and nothing is counted twice.</p></div></details>
+<details class="answer reveal"><summary>Stage 3</summary><div class="answer-body"><p><code>compare(base_run, new_run)</code>: the cases that passed in base and fail in new (regressions), and the reverse (fixes), sorted. A case in only one run doesn't count.</p></div></details>
+<details class="answer reveal"><summary>Stage 4</summary><div class="answer-body"><p><code>flaky(run_ids)</code>: the cases that passed in some of those runs and failed in others.</p></div></details>
+<details class="answer"><summary><span class="show">See answer</span><span class="hide">Hide answer</span></summary><div class="answer-body"><h3 id="1-clarify">1. Clarify</h3>
+<p><strong>Questions, with the interviewer's answers</strong></p>
+<ul><li>What's a result? <em>Pass or fail for now. Scores later.</em></li><li>Do runs arrive all at once? <em>No. Workers record results as they finish, in any order.</em></li><li>How big? <em>About 2,000 cases a run, one run a night per model.</em></li><li>An unknown run id? <em>Error.</em></li></ul>
+<h3 id="2-api">2. API</h3>
+<ul><li><code>record(run_id, case_id, passed)</code></li><li><code>summary(run_id) -&gt; Summary</code> with <code>passed</code>, <code>total</code>, <code>rate</code>. Raises <code>UnknownRun</code>.</li><li><code>compare(base, new) -&gt; dict[str, list[str]]</code> with <code>regressions</code> and <code>fixes</code>.</li><li><code>flaky(run_ids) -&gt; list[str]</code></li></ul>
+<h3 id="3-code">3. Code</h3>
+<pre><code>from collections import defaultdict
+from dataclasses import dataclass
+
+
+class UnknownRun(Exception): pass
+
+
+@dataclass(frozen=True)
+class Summary:
+    passed: int
+    total: int
+
+    @property
+    def rate(self) -&gt; float:
+        return self.passed / self.total if self.total else 0.0
+
+
+class EvalTracker:
+    def __init__(self):
+        self.runs = defaultdict(dict)         # run_id -&gt; {case_id: passed}; a retry overwrites
+
+    def record(self, run_id: str, case_id: str, passed: bool) -&gt; None:
+        self.runs[run_id][case_id] = passed
+
+    def _run(self, run_id: str) -&gt; dict:
+        if run_id not in self.runs:
+            raise UnknownRun(run_id)
+        return self.runs[run_id]
+
+    def summary(self, run_id: str) -&gt; Summary:
+        results = self._run(run_id)
+        return Summary(sum(results.values()), len(results))
+
+    def compare(self, base: str, new: str) -&gt; dict[str, list[str]]:
+        b, n = self._run(base), self._run(new)
+        both = b.keys() &amp; n.keys()
+        return {
+            &quot;regressions&quot;: sorted(c for c in both if b[c] and not n[c]),
+            &quot;fixes&quot;: sorted(c for c in both if not b[c] and n[c]),
+        }
+
+    def flaky(self, run_ids: list[str]) -&gt; list[str]:
+        seen = defaultdict(set)               # case -&gt; the outcomes it had
+        for rid in run_ids:
+            for case, passed in self._run(rid).items():
+                seen[case].add(passed)
+        return sorted(c for c, outcomes in seen.items() if len(outcomes) == 2)</code></pre>
+<h3 id="4-quick-tests">4. Quick tests</h3>
+<pre><code>ev = EvalTracker()
+for case, ok in [(&quot;c1&quot;, True), (&quot;c2&quot;, False), (&quot;c3&quot;, True)]:
+    ev.record(&quot;mon&quot;, case, ok)
+ev.record(&quot;tue&quot;, &quot;c1&quot;, False)
+ev.record(&quot;tue&quot;, &quot;c2&quot;, False); ev.record(&quot;tue&quot;, &quot;c2&quot;, True)   # c2 retried, passed
+ev.record(&quot;tue&quot;, &quot;c4&quot;, True)
+assert ev.summary(&quot;mon&quot;) == Summary(2, 3)
+assert ev.summary(&quot;tue&quot;).rate == 2 / 3
+assert ev.compare(&quot;mon&quot;, &quot;tue&quot;) == {&quot;regressions&quot;: [&quot;c1&quot;], &quot;fixes&quot;: [&quot;c2&quot;]}
+assert ev.flaky([&quot;mon&quot;, &quot;tue&quot;]) == [&quot;c1&quot;, &quot;c2&quot;]
+assert raises(UnknownRun, ev.summary, &quot;wed&quot;)</code></pre>
+<h3 id="5-follow-ups">5. Follow-ups</h3>
+<ul><li><strong>The dict absorbed Stage 2:</strong> keying results by case id means a retry overwrites, so "last result wins" and "never count twice" come for free. A list of results would have needed a rewrite.</li><li><strong>Complexity:</strong> <code>record</code> is O(1); <code>summary</code> and <code>compare</code> are O(cases); <code>flaky</code> is O(runs × cases).</li><li><strong>Is a drop real?</strong> On 2,000 cases, a few regressions can be noise. Report the regression and fix counts, and use a paired test on just the cases that changed (McNemar's test) before calling it worse.</li><li><strong>Parallel workers:</strong> a single dict write is safe in CPython, but <code>summary</code> can iterate while a worker inserts ("dictionary changed size"). Take a lock, or snapshot the dict first.</li><li><strong>How it evolves:</strong> a results table <code>(run_id, case_id, attempt, passed)</code> with a unique index, and the latest attempt per case picked in the query.</li></ul></div></details></section><script>(function(){
+var bs=document.querySelectorAll('.tabs button');
+function open(name){bs.forEach(function(b){var on=b.dataset.tab===name;b.setAttribute('aria-selected',on);
+document.getElementById('tab-'+b.dataset.tab).hidden=!on;});}
+bs.forEach(function(b){b.onclick=function(){open(b.dataset.tab);
+history.replaceState(null,'',b.dataset.tab==='coding'?'#coding':location.pathname);};});
+function fromHash(){var h=decodeURIComponent(location.hash.slice(1));if(!h)return;
+if(h==='coding'){open('coding');return;}
+var t=document.getElementById(h),p=t&&t.closest('.tabpanel');if(p){open(p.id.slice(4));t.scrollIntoView();}}
+fromHash();window.addEventListener('hashchange',fromHash);})();</script>
 </main>
 <footer><a href="#">Back to top</a></footer>
 </body>

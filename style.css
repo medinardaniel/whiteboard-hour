@@ -235,3 +235,12 @@ svg.v { display: block; width: 100%; height: auto; margin: 0 auto; overflow: vis
 .term b { display: block; font-size: .88rem; }
 .term span { color: var(--muted); }
 .cc-video { display: block; width: 100%; aspect-ratio: 16 / 9; margin: .6rem 0 .4rem; border-radius: 10px; background: #000; }
+
+/* Questions page tabs: System design | Coding */
+.tabs { display: flex; gap: .3rem; margin: .4rem 0 1.2rem; border-bottom: 1px solid var(--line); }
+.tabs button { font: inherit; font-weight: 600; background: none; border: 0; border-bottom: 3px solid transparent;
+  margin-bottom: -1px; padding: .55rem 1rem; color: var(--muted); cursor: pointer; }
+.tabs button[aria-selected="true"] { color: var(--accent); border-bottom-color: var(--accent); }
+details.reveal { margin: .5rem 0; }
+details.reveal > summary, details.reveal[open] > summary { background: var(--card); color: var(--accent); border: 1.5px solid var(--accent); }
+details.reveal .answer-body { margin-top: .5rem; }
