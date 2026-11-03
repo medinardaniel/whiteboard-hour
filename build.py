@@ -27,6 +27,8 @@ VISUAL_PAGES = ("components.md", "reference.md")
 # The Coding tab of the Questions page (check its answer keys with check_coding.py).
 CODING = "coding.md"
 SITE = "Whiteboard Hour"
+# Changes when style.css changes, so browsers drop a cached copy.
+CSS_VERSION = __import__("hashlib").sha1((ROOT / "style.css").read_bytes()).hexdigest()[:8]
 
 
 def slug(text):
@@ -310,7 +312,7 @@ def page(title, current, body, toc):
 <meta name="robots" content="noindex, nofollow">
 <meta name="color-scheme" content="light dark">
 <title>{title} · {SITE}</title>
-<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="style.css?v={CSS_VERSION}">
 </head>
 <body>
 <header class="top"><a class="brand" href="index.html">{SITE}</a><nav>{nav}</nav></header>
