@@ -2,6 +2,8 @@
 
 **TLDR.** Learn these 23 well and you can design any small-business-plus-spike prompt. They're in the order you use them in the interview. Each card shows a diagram, what the part is, an analogy, a real scenario with and without it, the line to say, and the related terms as tiles. Everything else is in the [optional reference](reference.html); skip it for now.
 
+**One-sheet view:** [all the cards plus a worked framework (PDF)](cards-sheet.pdf), 2 landscape pages.
+
 **Study plan**
 
 - **Day 1:** cards 1 to 10. Then draw the pizza-shop V1 from memory.

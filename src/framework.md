@@ -4,6 +4,8 @@
 
 **See it done:** [watch a full mock interview](questions.html#mock), the pizza shop question in 11 minutes, chaptered by phase.
 
+**One-sheet view:** [all the cards plus a worked framework (PDF)](cards-sheet.pdf), 2 landscape pages.
+
 ```timeline
 1|Clarify|6
 2|Version 1|14
