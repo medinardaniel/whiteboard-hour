@@ -1,0 +1,415 @@
+{
+ "target": "index.html",
+ "viewport": [
+  1920,
+  1080
+ ],
+ "voice": "en-US-AndrewMultilingualNeural",
+ "rate": "+4%",
+ "pronounce": {},
+ "load_ms": 1200,
+ "gap_ms": 400,
+ "tail_ms": 1500,
+ "cues": [
+  {
+   "say": "Streaming text parser. We'll build it from the ground up: what the words mean, what the problem asks, the idea in pictures, and then every line of code, tied back to its picture.",
+   "post_ms": 1000
+  },
+  {
+   "say": "First, the words. Markdown is a way to style plain text using small marks. On the left is the raw text a language model actually sends. On the right is what the reader should see.",
+   "post_ms": 600,
+   "do": "js:setTimeout(D1, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "The mark we care about is this character, the backtick. Put one backtick on each side of a few characters, and that's inline code: a bit of code inside a sentence.",
+   "post_ms": 500,
+   "do": "js:setTimeout(D2, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "Three backticks in a row open a code block, which is also called a code fence. Everything after that is code, until three more backticks close it. The letters right after the opening, here P Y, name the language.",
+   "post_ms": 800,
+   "do": "js:setTimeout(D3, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "A parser is code that reads raw text, and works out what each part means. Here that means labeling every part as plain text, inline code, or fence.",
+   "post_ms": 800,
+   "do": "js:setTimeout(D4, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "Now, streaming. A language model doesn't send its reply all at once. It sends small pieces as it writes them. Each piece is called a chunk.",
+   "post_ms": 500,
+   "do": "js:setTimeout(D5, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "And the cuts land anywhere. Look at these two chunks: the cut goes right through the middle of three backticks. You don't choose where the cuts land.",
+   "post_ms": 500,
+   "do": "js:setTimeout(D6, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "So a streaming parser handles each chunk as it arrives, instead of waiting for the whole reply. The reader sees the styled text grow, piece by piece.",
+   "post_ms": 1000,
+   "do": "js:setTimeout(D7, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "Now the problem, the way candidates report it. Text from a model arrives in chunks. As each chunk arrives, work out what can be shown, and how it's styled. Reports differ on the exact interface, so here's a clean one you can propose.",
+   "post_ms": 500,
+   "do": "js:setTimeout(P1, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "Feed takes one chunk, and returns a list of events. An event is just a pair: a kind, and some text.",
+   "post_ms": 400,
+   "do": "js:setTimeout(P2, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "Finish is called once, when the stream ends. It returns anything that's still waiting.",
+   "post_ms": 900,
+   "do": "js:setTimeout(P3, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "Let's make that concrete. Here's our text, cut into six chunks. We'll use this example all the way through.",
+   "post_ms": 400,
+   "do": "js:setTimeout(E1, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "Feed gets called six times, and these are the events that come back. Notice the fifth chunk returns nothing at all, and that's fine.",
+   "post_ms": 1000,
+   "do": "js:setTimeout(E2, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "Put them together, and this is what's on screen.",
+   "post_ms": 1000,
+   "do": "js:setTimeout(E3, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "There are three rules. First: the result can't depend on where the cuts landed. Here's the same text, cut three different ways, and the same styled text every time.",
+   "post_ms": 700,
+   "do": "js:setTimeout(P4, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "Second: style it as soon as you can. Once you know you're in code, show it as code, even before the closing backtick arrives. This is called optimistic styling.",
+   "post_ms": 500,
+   "do": "js:setTimeout(P5, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "Third: never take back what's on screen. Events only add to the end. So a reader can select some text, while the reply is still arriving, and the selection stays put.",
+   "post_ms": 1000,
+   "do": "js:setTimeout(P6, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "Why is this hard? The obvious way to avoid the cuts is to wait for the whole reply, then parse it. But then the reader stares at a blank screen until the very end.",
+   "post_ms": 400,
+   "do": "js:setTimeout(B1, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "Next idea: on every chunk, parse everything so far, and redraw it all. It gives the right answer, but the screen is replaced over and over, the reader's selection is lost, and the work grows with every chunk.",
+   "post_ms": 600,
+   "do": "js:setTimeout(B2, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "So parse each chunk on its own? That breaks too. This chunk ends in one backtick, so it looks like inline code. The next one starts with two, which looks like nothing.",
+   "post_ms": 400,
+   "do": "js:setTimeout(B3, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "The real answer is three, a code fence, and neither chunk can see that. So the real constraint is this: one pass, one character at a time, remembering just enough between chunks to pick up where you left off.",
+   "post_ms": 1000,
+   "do": "js:setTimeout(B4, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "Before coding, ask a few questions, because each answer changes the code. What if the stream ends inside code? Then it stays code. It's already on screen.",
+   "post_ms": 400,
+   "do": "js:setTimeout(C1, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "What about two backticks on their own? Treat them as ordinary characters.",
+   "post_ms": 400,
+   "do": "js:setTimeout(C2, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "A single backtick inside a fence? That's ordinary code. Only three in a row close a fence.",
+   "post_ms": 400,
+   "do": "js:setTimeout(C3, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "And the language name, or a fence in the middle of a line? Keep it simple first, and handle those as follow-ups.",
+   "post_ms": 1000,
+   "do": "js:setTimeout(C4, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "Now the plan. The tool is called a state machine. It's a thing that's in exactly one state at a time, and each input may move it to another state. A traffic light is one. It's always exactly one color, and a timer moves it on.",
+   "post_ms": 600,
+   "do": "js:setTimeout(L1, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "Ours has three states: text, inline, and fence. One backtick moves between text and inline. Three move between text and fence. And every character we read belongs to whichever state we're in.",
+   "post_ms": 800,
+   "do": "js:setTimeout(L2, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "Here's the catch. You read one backtick. What does it mean? If a letter comes next, it opened inline code. If two more come, it's a fence. If one more comes and then a letter, it was just two ordinary characters.",
+   "post_ms": 500,
+   "do": "js:setTimeout(L3, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "You can't know yet, so don't decide. Hold it, and keep a count. When a character that isn't a backtick arrives, or the count hits three, you can finally decide.",
+   "post_ms": 500,
+   "do": "js:setTimeout(L4, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "That's the whole design. Between chunks, the parser only has to remember two things: the state it's in, and how many backticks it's holding.",
+   "post_ms": 1100,
+   "do": "js:setTimeout(L5, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "Now the code, starting with what the parser remembers. On the left is the picture, and on the right is the code for it. State is which of these three boxes is lit. It starts as text.",
+   "post_ms": 500,
+   "do": "js:setTimeout(N1, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "Ticks is the count of held backticks: how many of these slots are full.",
+   "post_ms": 500,
+   "do": "js:setTimeout(N2, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "And buff, short for buffer, is a list of characters waiting to go out. A buffer is just a temporary holding area. It's a list, because adding to a list is cheap, and joining it at the end is the usual way to build a string in Python.",
+   "post_ms": 1000,
+   "do": "js:setTimeout(N3, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "Now feed, with the first chunk. Out is the list of events this call will return. It's a local variable, so it disappears when the call ends. That will matter soon.",
+   "post_ms": 500,
+   "do": "js:setTimeout(F1, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "The loop looks at one character at a time. The first is U. It isn't a backtick, so we take the else branch. Settle deals with any held backticks. There are none, so it does nothing. Then the letter goes into the buffer.",
+   "post_ms": 400,
+   "do": "js:setTimeout(F2, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "The same for S, E, and the space. That's the plain path: one trip around the loop, one tile in the buffer.",
+   "post_ms": 800,
+   "do": "js:setTimeout(F3, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "Now a backtick, so we call tick. The state isn't inline, so we skip that branch. The count goes up to one. It isn't three, so we're done. Notice that nothing was decided. The backtick went into a slot, not the buffer.",
+   "post_ms": 600,
+   "do": "js:setTimeout(K1, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "Next, X. It isn't a backtick, so settle runs first, and this is where the decision happens. One held, and we're in text. So that backtick opened inline code. Reset the count, and switch.",
+   "post_ms": 500,
+   "do": "js:setTimeout(K2, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "Switch does two things, in this order. First it flushes, because the characters in the buffer belong to the old state. Flush joins them into one string, adds an event with the current state, and empties the buffer. Only then does the state change.",
+   "post_ms": 700,
+   "do": "js:setTimeout(K3, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "Back in feed, X goes into the buffer, now in the inline state. The next character is a backtick. In inline, one backtick always closes it. So we switch back to text, and that flushes X as inline code.",
+   "post_ms": 600,
+   "do": "js:setTimeout(K4, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "The space, T, and H go into the buffer, and the chunk runs out. This last line flushes what's left, so the reader sees it now, not later. One chunk gave us three events, and two changes of state. A chunk can hold any number of them.",
+   "post_ms": 900,
+   "do": "js:setTimeout(K5, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "The second chunk is the tricky one. E, N, and a space. Then a backtick: the count goes to one, and the chunk ends. Feed flushes the text, and returns, so out is gone. But ticks lives on self, on the object, so it survives until the next call. That's how we remember across a cut.",
+   "post_ms": 800,
+   "do": "js:setTimeout(K6, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "Third chunk. Two more backticks. One makes two. The next makes three, so this branch fires. Reset the count, and pick the new state. This is Python's one-line if: if we're in a fence, go to text, otherwise go to fence. So the same line opens and closes.",
+   "post_ms": 600,
+   "do": "js:setTimeout(K7, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "Now we're in the fence. P Y, a newline, P R. They all go through the buffer, and come out labeled fence. The next chunk does the same, and it ends with one backtick held, again.",
+   "post_ms": 500,
+   "do": "js:setTimeout(K8, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "The fifth chunk is only two backticks. That makes three, so the fence closes. The buffer is empty, so flush adds nothing, and feed returns an empty list. The last chunk is plain text. And there's our result, exactly what we wanted.",
+   "post_ms": 1000,
+   "do": "js:setTimeout(K9, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "One branch left. Take A, two backticks, then B. When B arrives, settle sees two held. Two means nothing, so this branch puts them back as ordinary characters, ahead of B. The same branch handles a lone backtick inside a fence.",
+   "post_ms": 800,
+   "do": "js:setTimeout(K10, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "Last method. What if the stream ends with backticks still held? Nothing will ever come along to settle them. So finish sends them out as ordinary characters, in the current state.",
+   "post_ms": 400,
+   "do": "js:setTimeout(K11, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "And a fence that never closed needs nothing at all. Its code is already on screen, already styled.",
+   "post_ms": 1000,
+   "do": "js:setTimeout(K12, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "Now tests. The one that catches almost everything is this: cut the same text at random, run it, and compare the result with no cuts at all. Cuts change the sizes of the pieces, so merged glues neighbors of the same kind together before comparing.",
+   "post_ms": 500,
+   "do": "js:setTimeout(Q1, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "Run that on a list of nasty strings: a backtick at the very end, two backticks, a fence that never closes, four backticks in a row, and a fence with a backtick inside.",
+   "post_ms": 800,
+   "do": "js:setTimeout(Q2, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "Here's how that fits in the hour, in the order you'd type it. Five minutes to clarify. Then the state and feed for plain text. Then tick and settle, testing inline code first and fences second. Then finish, then the random cut test, which leaves time for follow-ups.",
+   "post_ms": 1100,
+   "do": "js:setTimeout(Q3, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "Expect follow-ups. To pull out the language name, add a fourth state after the opening fence, which collects characters up to the newline.",
+   "post_ms": 400,
+   "do": "js:setTimeout(U1, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "To open a fence only at the start of a line, remember whether the last character was a newline. Anywhere else, three backticks are ordinary characters.",
+   "post_ms": 400,
+   "do": "js:setTimeout(U2, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "For other marks, like bold, it's the same trick. A star might be the first of two stars, so hold it until you can tell.",
+   "post_ms": 400,
+   "do": "js:setTimeout(U3, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "And on the screen: each event adds to the last block, or opens a new one. Old text is never touched, which is what keeps a selection working.",
+   "post_ms": 1000,
+   "do": "js:setTimeout(U4, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "Here's the full solution, all on one screen. You've now seen every line of it. Pause here if you want to read it through.",
+   "post_ms": 2500,
+   "do": "js:setTimeout(S1, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "At a high level, it has six pieces. Init holds what survives between chunks: the state, the held count, and the buffer.",
+   "post_ms": 500,
+   "do": "js:setTimeout(S2, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "Feed loops over the characters. A backtick goes to tick. Anything else settles what's held, then goes in the buffer. At the end of the chunk, it flushes.",
+   "post_ms": 500,
+   "do": "js:setTimeout(S3, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "Tick: in inline, one backtick closes it. Otherwise count it, and at three, open or close the fence.",
+   "post_ms": 500,
+   "do": "js:setTimeout(S4, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "Settle runs when a normal character arrives. One held in text opens inline code. Anything else held was just ordinary characters.",
+   "post_ms": 500,
+   "do": "js:setTimeout(S5, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "Switch flushes, then changes the state. And flush turns the buffer into one event.",
+   "post_ms": 500,
+   "do": "js:setTimeout(S6, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "Finally, finish sends out whatever is still held when the stream ends.",
+   "post_ms": 800,
+   "do": "js:setTimeout(S7, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "As for cost: it's one step per character. And between chunks, we hold at most two backticks, however long the reply gets.",
+   "post_ms": 1000,
+   "do": "js:setTimeout(S8, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "Let's tie the pictures to the code. The lit box is self dot state. The filled slots are self dot ticks.",
+   "post_ms": 400,
+   "do": "js:setTimeout(R1, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "The tiles waiting to go out are self dot buff. And the tiles leaving together as one piece are flush.",
+   "post_ms": 400,
+   "do": "js:setTimeout(R2, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "A box lighting up is switch: flush first, then change the state.",
+   "post_ms": 1000,
+   "do": "js:setTimeout(R3, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "The one line to remember: only two things cross a chunk: the state, and the held backticks.",
+   "post_ms": 1500,
+   "do": "js:setTimeout(Z1, 0)",
+   "settle_ms": 350
+  }
+ ]
+}

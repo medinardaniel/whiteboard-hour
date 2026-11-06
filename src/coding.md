@@ -11,6 +11,12 @@
 7. [Feature flags](#k-flags) (stable percentage rollout)
 8. [Nightly eval results](#k-evals) (regressions between runs)
 
+With a video walkthrough. Try each one first, because the video shows a full solution. These prompts are rebuilt from public candidate reports, so the real wording may differ:
+
+9. [Repository Merkle tree](#k-merkle) (hash bottom up, compare top down)
+10. [Streaming text parser](#k-stream) (state across chunks)
+11. [Hierarchical rate limiter](#k-limiter) (check every level, then commit)
+
 The quick tests in every answer use this helper:
 
 ```python
@@ -982,4 +988,518 @@ assert raises(UnknownRun, ev.summary, "wed")
 - **Is a drop real?** On 2,000 cases, a few regressions can be noise. Report the regression and fix counts, and use a paired test on just the cases that changed (McNemar's test) before calling it worse.
 - **Parallel workers:** a single dict write is safe in CPython, but `summary` can iterate while a worker inserts ("dictionary changed size"). Take a lock, or snapshot the dict first.
 - **How it evolves:** a results table `(run_id, case_id, attempt, passed)` with a unique index, and the latest attempt per case picked in the query.
+:::
+
+---
+
+## 9. Repository Merkle tree {#k-merkle}
+
+> You're working on the part of a code editor that keeps a repository in sync with a server. A repo can hold hundreds of thousands of files, and comparing them one by one is too slow. Build a Merkle tree over a real folder on disk, so two snapshots of the folder can be compared quickly.
+
+Implement this class:
+
+```python
+class MerkleTree:
+    def build(self, path):
+        """Read the folder at path. Return a tree of your own design."""
+
+    def get_hash(self, path, tree):
+        """Return the hash stored for a relative path, like "src/db.py"."""
+
+    def diff(self, tree_a, tree_b):
+        """Return the changes from tree_a to tree_b: a list of (path, status)."""
+```
+
+**Requirements**
+
+- A file's hash comes from its content. A folder's hash comes from what's directly inside it.
+- `status` is `"ADDED"`, `"REMOVED"` or `"MODIFIED"`. Report files, not folders.
+- `diff` must not look inside a folder whose hash didn't change.
+- Write your own tests, using real temporary folders.
+
+**Example**
+
+```text
+Monday            Tuesday
+src/app.py        src/app.py
+src/db.py         src/db.py
+src/util/io.py    src/util/io.py   (edited)
+docs/a.md         docs/a.md
+docs/b.md         docs/c.md        (b.md deleted, c.md is new)
+lib/x.py          lib/x.py
+lib/y.py          lib/y.py
+
+diff(monday, tuesday) ==
+  [("docs/b.md", "REMOVED"), ("docs/c.md", "ADDED"), ("src/util/io.py", "MODIFIED")]
+```
+
+**Walkthrough** (12:50)
+
+::: video w01
+:::
+
+::: answer
+
+### 1. Clarify
+
+**Questions, with the interviewer's answers**
+
+- What counts as a change? *Content and names. Not timestamps, or identical folders would look different.*
+- Is a rename special? *Not at first. It's one removed file and one added file.*
+- Can files be huge? *Assume yes, so read them in pieces.*
+- Symbolic links? *Assume none. Say you'd skip them, so a link can't trap you in a loop.*
+- A path that isn't in the tree? *Raise `KeyError`.*
+
+### 2. The idea
+
+Two moves. Hash bottom up: a folder's hash needs its children's hashes first, and recursion gives you that order. Compare top down: if two hashes match, everything below them matches, so skip the whole subtree.
+
+### 3. Code
+
+```python
+import hashlib
+import os
+from dataclasses import dataclass
+
+
+@dataclass
+class Node:
+    hash: str
+    children: dict = None      # name -> Node. None means a file
+
+
+def hash_file(path):
+    h = hashlib.sha256(b"F\0")
+    with open(path, "rb") as f:
+        while chunk := f.read(65536):
+            h.update(chunk)
+    return h.hexdigest()
+
+
+class MerkleTree:
+    def build(self, path):
+        if not os.path.isdir(path):
+            return Node(hash_file(path))
+        children = {}
+        for entry in os.scandir(path):
+            children[entry.name] = self.build(entry.path)
+        h = hashlib.sha256(b"D\0")
+        for name in sorted(children):
+            h.update(f"{name}\0{children[name].hash}\n".encode())
+        return Node(h.hexdigest(), children)
+
+    def get_hash(self, path, tree):
+        node = tree
+        for part in [p for p in path.split("/") if p]:
+            if node.children is None or part not in node.children:
+                raise KeyError(path)
+            node = node.children[part]
+        return node.hash
+
+    def diff(self, a, b, path=""):
+        if a.hash == b.hash:
+            return []
+        if a.children is None and b.children is None:
+            return [(path, "MODIFIED")]
+        if a.children is None or b.children is None:
+            return files(a, path, "REMOVED") + files(b, path, "ADDED")
+        old, new = a.children, b.children
+        changes = []
+        for name in sorted(old.keys() | new.keys()):
+            child = f"{path}/{name}" if path else name
+            if name not in old:
+                changes += files(new[name], child, "ADDED")
+            elif name not in new:
+                changes += files(old[name], child, "REMOVED")
+            else:
+                changes += self.diff(old[name], new[name], child)
+        return changes
+
+
+def files(node, path, kind):
+    if node.children is None:
+        return [(path, kind)]
+    found = []
+    for name in sorted(node.children):
+        found += files(node.children[name], f"{path}/{name}", kind)
+    return found
+```
+
+### 4. Quick tests
+
+```python
+import tempfile
+from pathlib import Path
+
+
+def tree(file_map, dirs=()):
+    with tempfile.TemporaryDirectory() as d:
+        for rel in dirs:
+            Path(d, rel).mkdir(parents=True, exist_ok=True)
+        for rel, text in file_map.items():
+            p = Path(d, rel)
+            p.parent.mkdir(parents=True, exist_ok=True)
+            p.write_text(text)
+        return MerkleTree().build(d)
+
+
+MONDAY = {"src/app.py": "print(1)", "src/db.py": "connect()", "src/util/io.py": "read()",
+          "docs/a.md": "# A", "docs/b.md": "# B", "lib/x.py": "x = 1", "lib/y.py": "y = 2"}
+TUESDAY = {"src/app.py": "print(1)", "src/db.py": "connect()", "src/util/io.py": "read(path)",
+           "docs/a.md": "# A", "docs/c.md": "# C", "lib/x.py": "x = 1", "lib/y.py": "y = 2"}
+
+m = MerkleTree()
+a, b = tree(MONDAY), tree(TUESDAY)
+assert m.diff(a, b) == [("docs/b.md", "REMOVED"), ("docs/c.md", "ADDED"), ("src/util/io.py", "MODIFIED")]
+assert m.diff(a, tree(MONDAY)) == []                                  # identical folders, different paths
+assert m.get_hash("src/util/io.py", a) == a.children["src"].children["util"].children["io.py"].hash
+assert raises(KeyError, m.get_hash, "src/nope.py", a)
+assert raises(KeyError, m.get_hash, "src/app.py/x", a)
+assert m.diff(tree({"x": "1"}), tree({"y": "1"})) == [("x", "REMOVED"), ("y", "ADDED")]         # a rename
+assert m.diff(tree({"p": "1"}), tree({"p/q": "1"})) == [("p", "REMOVED"), ("p/q", "ADDED")]     # file to folder
+assert tree({"p": ""}).hash != tree({}, dirs=["p"]).hash              # empty file, empty folder
+```
+
+### 5. Follow-ups
+
+- **Complexity:** `build` reads every byte once. `get_hash` takes one step per level. `diff` only walks the branches that changed.
+- **One file changes after build:** don't rebuild. Rehash that file, then only its parents, up to the root.
+- **Two machines:** send the root hash first. If it differs, ask for the children's hashes, and go down only where they differ. It's the same diff, with a network call at each step.
+- **Renames:** a file's hash comes only from its content, so a removed file and an added file with the same hash are a move.
+- **Millions of files:** store the tree on disk, and use a file's size and modified time to skip rehashing files that can't have changed.
+:::
+
+---
+
+## 10. Streaming text parser {#k-stream}
+
+> A language model's reply reaches the editor in chunks, and the editor shows it as it arrives. A chunk can be cut anywhere, even in the middle of a delimiter. Build a parser that takes the chunks one at a time, and marks each part of the reply as plain text, inline code or a code block.
+
+Here's one interface. Propose another if you prefer:
+
+```python
+class StreamParser:
+    def feed(self, chunk):
+        """Take the next chunk. Return the (kind, text) events ready to show."""
+
+    def finish(self):
+        """The stream ended. Return any events still waiting."""
+```
+
+**Requirements**
+
+- `kind` is `"text"`, `"inline"` or `"fence"`.
+- One backtick opens and closes inline code. Three backticks in a row open and close a code block, also called a fence.
+- The result can't depend on where the cuts land. Pieces may be sized differently, but every character must get the same kind.
+- Style it as soon as you can. Once you know you're in code, send it as code, even before the closing delimiter arrives.
+- Never take back what you've sent. A reader can be selecting text while the reply is still arriving.
+
+**Example**
+
+```text
+feed("Use `x` th")   -> [("text", "Use "), ("inline", "x"), ("text", " th")]
+feed("en `")         -> [("text", "en ")]
+feed("``py\npr")     -> [("fence", "py\npr")]
+feed("int(1)\n`")    -> [("fence", "int(1)\n")]
+feed("``")           -> []
+feed(" done")        -> [("text", " done")]
+finish()             -> []
+```
+
+**Walkthrough** (12:32)
+
+::: video w02
+:::
+
+::: answer
+
+### 1. Clarify
+
+**Questions, with the interviewer's answers**
+
+- What if the stream ends inside code? *It stays code. It's already on screen.*
+- Two backticks on their own? *Ordinary characters.*
+- One backtick inside a code block? *Ordinary code. Only three in a row close it.*
+- The language name after the opening fence, or a fence in the middle of a line? *Keep it simple first. They're follow-ups.*
+
+### 2. The idea
+
+A state machine with three states: text, inline and fence. The catch is that one backtick can't be decided yet: it may open inline code, start a fence, or be an ordinary character. So hold it and keep a count, and decide when a different character arrives or the count hits three. Between chunks, the parser only has to remember the state and the held count.
+
+### 3. Code
+
+```python
+TEXT, INLINE, FENCE = "text", "inline", "fence"
+TICK = "`"
+
+
+class StreamParser:
+    def __init__(self):
+        self.state = TEXT
+        self.ticks = 0    # backticks held, not yet decided
+        self.buf = []     # characters waiting to go out
+
+    def feed(self, chunk):
+        out = []
+        for ch in chunk:
+            if ch == TICK:
+                self._tick(out)
+            else:
+                self._settle(out)
+                self.buf.append(ch)
+        self._flush(out)
+        return out
+
+    def finish(self):
+        out = []
+        if self.ticks:
+            out.append((self.state, TICK * self.ticks))
+            self.ticks = 0
+        return out
+
+    def _tick(self, out):
+        if self.state == INLINE:
+            self._switch(TEXT, out)
+            return
+        self.ticks += 1
+        if self.ticks == 3:
+            self.ticks = 0
+            target = TEXT if self.state == FENCE else FENCE
+            self._switch(target, out)
+
+    def _settle(self, out):
+        if self.ticks == 1 and self.state == TEXT:
+            self.ticks = 0
+            self._switch(INLINE, out)
+        elif self.ticks:
+            self.buf.append(TICK * self.ticks)
+            self.ticks = 0
+
+    def _switch(self, state, out):
+        self._flush(out)
+        self.state = state
+
+    def _flush(self, out):
+        if self.buf:
+            out.append((self.state, "".join(self.buf)))
+            self.buf = []
+```
+
+### 4. Quick tests
+
+```python
+import random
+
+
+def merged(events):                  # cuts change the piece sizes, so glue neighbors of the same kind
+    res = []
+    for kind, text in events:
+        if res and res[-1][0] == kind:
+            res[-1] = (kind, res[-1][1] + text)
+        else:
+            res.append((kind, text))
+    return res
+
+
+def run(chunks):
+    p = StreamParser()
+    events = []
+    for c in chunks:
+        events += p.feed(c)
+    return merged(events + p.finish())
+
+
+def random_cuts(s):
+    cuts = sorted(random.sample(range(len(s) + 1), random.randint(0, min(len(s), 5))))
+    return [s[i:j] for i, j in zip([0] + cuts, cuts + [len(s)])]
+
+
+SAMPLE = "Use `x` then ```py\nprint(1)\n``` done"
+WANT = [("text", "Use "), ("inline", "x"), ("text", " then "), ("fence", "py\nprint(1)\n"), ("text", " done")]
+assert run(["Use `x` th", "en `", "``py\npr", "int(1)\n`", "``", " done"]) == WANT
+assert run(list(SAMPLE)) == WANT
+for s in [SAMPLE, "a``b", "`a", "```a", "a`", "a``", "```a``b```c", "````", "`a``b`", "```a`b```", "", "``````", "x```"]:
+    for _ in range(300):
+        assert run(random_cuts(s)) == run([s]), s
+assert run(["a``b"]) == [("text", "a``b")]
+assert run(["```a`b```c"]) == [("fence", "a`b"), ("text", "c")]
+assert run(["a``"]) == [("text", "a``")]
+assert StreamParser().feed('`print("hello wor') == [("inline", 'print("hello wor')]    # styled before it closes
+```
+
+### 5. Follow-ups
+
+- **Complexity:** one step per character. Between chunks, it holds at most two backticks.
+- **The language name:** add a fourth state after the opening fence, which collects characters up to the newline.
+- **Fences only at the start of a line:** remember whether the last character was a newline. Anywhere else, three backticks are ordinary characters.
+- **Other marks, like bold:** the same trick. A star might be the first of two stars, so hold it until you can tell.
+- **On the screen:** each event adds to the last block, or opens a new one. Old text is never touched, which is what keeps a selection working.
+:::
+
+---
+
+## 11. Hierarchical rate limiter {#k-limiter}
+
+> We send notifications to users, and too many of them annoy people. Every user belongs to one team, and every team belongs to one company. Before each send, decide whether it may go out.
+
+Implement this class:
+
+```python
+class NotificationLimiter:
+    def __init__(self, user_to_team, team_to_company):
+        """Two dicts: a user id to a team id, and a team id to a company id."""
+
+    def should_send_notifications(self, user_id, timestamp):
+        """Return True if this notification may be sent, and False if not."""
+```
+
+**Requirements**
+
+- In any sliding window of 600 seconds, allow at most 3 sends per user, 10 per team and 20 per company.
+- An earlier send at time `s` counts at time `t` only if `t - s < 600`.
+- A send goes through only if every level has room. A refused send counts nowhere, at any level.
+- Timestamps are in seconds, and never go backward.
+
+**Example 1: one user**
+
+```text
+should_send_notifications("u1", 1)    -> True
+should_send_notifications("u1", 2)    -> True
+should_send_notifications("u1", 3)    -> True
+should_send_notifications("u1", 4)    -> False   (the user's limit)
+should_send_notifications("u1", 601)  -> True    (the send at time 1 has expired)
+should_send_notifications("u1", 602)  -> True
+```
+
+**Example 2: five users on one team**
+
+```text
+u1 to u5 at times 1 to 5    -> True, five times
+u1 to u5 at times 6 to 10   -> True, five times
+u1 at time 11               -> False   (the team's limit, though u1 has sent only 2)
+u2 at time 601              -> True    (the send at time 1 has expired)
+```
+
+**Walkthrough** (11:57)
+
+::: video w03
+:::
+
+::: answer
+
+### 1. Clarify
+
+**Questions, with the interviewer's answers**
+
+- Is something exactly 600 seconds old still inside? *No, it has expired.*
+- Do many threads call this at once? *Assume yes.*
+- An unknown user? *Assume it's an error.*
+- Is this one server or many? *One for the code. We'll talk about many afterward.*
+
+### 2. The idea
+
+Keep the time of every accepted send, in one deque per level, so old sends can fall off the left in one step. Then make two moves. Look: drop what's expired, and check every level for room, changing no counts. Commit: only if all three said yes, add the time to all three. Hold one lock around both moves.
+
+### 3. Code
+
+```python
+import threading
+from collections import defaultdict, deque
+
+
+class NotificationLimiter:
+    LIMITS = {"user": 3, "team": 10, "company": 20}
+    WINDOW = 600
+
+    def __init__(self, user_to_team, team_to_company):
+        self.user_to_team = user_to_team
+        self.team_to_company = team_to_company
+        self.sent = defaultdict(deque)    # (level, id) -> times
+        self.lock = threading.Lock()
+
+    def should_send_notifications(self, user_id, timestamp):
+        team = self.user_to_team[user_id]
+        company = self.team_to_company[team]
+        keys = [("user", user_id),
+                ("team", team),
+                ("company", company)]
+        with self.lock:
+            for key in keys:
+                log = self.sent[key]
+                while log and timestamp - log[0] >= self.WINDOW:
+                    log.popleft()
+                if len(log) >= self.LIMITS[key[0]]:
+                    return False
+            for key in keys:
+                self.sent[key].append(timestamp)
+            return True
+```
+
+### 4. Quick tests
+
+```python
+T, F = True, False
+L = NotificationLimiter({"u1": "t1"}, {"t1": "c1"})
+ask = L.should_send_notifications
+times = (1, 2, 3, 4, 601, 602)
+assert [ask("u1", t) for t in times] == [T, T, T, F, T, T]
+
+five = {f"u{i}": "t1" for i in range(1, 6)}
+L = NotificationLimiter(five, {"t1": "c1"})
+ask = L.should_send_notifications
+calls = [(f"u{i}", i) for i in range(1, 6)] + [(f"u{i}", i + 5) for i in range(1, 6)] + [("u1", 11), ("u2", 601)]
+assert [ask(u, t) for u, t in calls] == [T] * 10 + [F, T]
+
+# a refused send leaves no trace
+L = NotificationLimiter({**five, "z": "t1"}, {"t1": "c1"})
+ask = L.should_send_notifications
+for i in range(1, 6):
+    ask(f"u{i}", 0)
+    ask(f"u{i}", 1)
+assert ask("z", 2) is False
+assert len(L.sent[("user", "z")]) == 0
+
+# the company limit: two full teams, then a third team is refused
+org = {f"a{i}": "ta" for i in range(4)} | {f"b{i}": "tb" for i in range(4)} | {"c0": "tc"}
+L = NotificationLimiter(org, {"ta": "c", "tb": "c", "tc": "c"})
+ask = L.should_send_notifications
+for u in [f"{t}{i}" for t in "ab" for i in range(4)]:
+    for _ in range(3):
+        ask(u, 0)
+assert ask("c0", 1) is False
+
+# the exact boundary
+L = NotificationLimiter({"u1": "t1"}, {"t1": "c1"})
+ask = L.should_send_notifications
+for _ in range(3):
+    ask("u1", 0)
+assert ask("u1", 599) is False
+assert ask("u1", 600) is True
+
+# 50 threads: exactly 20 get through
+org = {f"u{i}": f"t{i}" for i in range(50)}
+L = NotificationLimiter(org, {f"t{i}": "c" for i in range(50)})
+res = []
+
+
+def worker(i):
+    for _ in range(3):
+        res.append(L.should_send_notifications(f"u{i}", 0))
+
+
+threads = [threading.Thread(target=worker, args=(i,)) for i in range(50)]
+[t.start() for t in threads]
+[t.join() for t in threads]
+assert sum(res) == 20
+```
+
+### 5. Follow-ups
+
+- **Complexity:** a few steps per call, on average, since each send is removed at most once. No log ever holds more than its limit: 3, 10 or 20.
+- **Why not a fixed window?** One counter reset every 10 minutes allows a burst around the reset: 3 just before and 3 just after, with a limit of 3.
+- **Many servers:** a lock only protects one program. Move the logs to a shared store like Redis, and run a Lua script that prunes, looks at all three, and adds to all or none. Redis runs it as one step.
+- **Redis split across machines:** one script must reach all its keys on one machine, so put all of a company's keys together with a hash tag. A very busy company can then overload its machine.
+- **Retries:** give each send a request id. If you've seen that id, return the first answer, and count nothing.
+- **Redis is down:** allow the send or refuse it. It's a product choice, so say which one and why.
+- **Limits in the thousands:** a log per level gets big, so switch to approximate counters.
 :::

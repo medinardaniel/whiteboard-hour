@@ -1,0 +1,509 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="color-scheme" content="light">
+<title>Hierarchical rate limiter: walkthrough</title>
+<link rel="stylesheet" href="../lib/lecture.css">
+<link rel="stylesheet" href="../lib/walk.css">
+<script src="../lib/icons.js"></script>
+<script src="../lib/lecture.js"></script>
+<script src="../lib/walk.js"></script>
+<script src="data.js"></script>
+<style>
+.quote { font-size:50px; line-height:1.36; font-weight:600; background:#fff; border-left:12px solid var(--acc); border-radius:14px; padding:30px 40px; }
+.bigline { font-size:50px; font-weight:800; line-height:1.3; }
+.bigv { position:absolute; font-size:44px; font-weight:800; }
+.sig { font: 700 40px Consolas, Menlo, monospace; background:#fff; border:3px solid var(--acc); border-radius:18px; padding:22px 30px; }
+.sig b { color:var(--good); }
+.dicts { font: 700 36px/1.5 Consolas, Menlo, monospace; background:#fff; border:3px solid var(--line); border-radius:18px; padding:18px 30px; }
+.chipr { display:flex; gap:24px; font-size:40px; font-weight:800; }
+.chipr span { background:#fff; border:3px solid var(--acc); border-radius:16px; padding:16px 28px; }
+.chipr b { color:var(--acc); font-size:50px; }
+.qrow { display:grid; grid-template-columns:680px 1000px; gap:24px; align-items:center; background:#fff; border:3px solid var(--line); border-radius:18px; padding:18px 30px; font-size:36px; line-height:1.3; }
+.qrow b { color:var(--acc); }
+/* notifications piling up */
+.phone { background:#30343a; border-radius:44px; padding:30px 22px; width:440px; height:760px; box-sizing:border-box; overflow:hidden; }
+.nf { background:#fff; border-radius:14px; padding:12px 18px; margin-bottom:10px; font-size:26px; font-weight:700; opacity:0; transform: translateY(-16px); transition: all .25s; }
+.nf.in { opacity:1; transform:none; }
+/* gauges */
+.gate { position:absolute; width:330px; min-height:350px; background:#fff; border:4px solid #c9ced6; border-radius:22px; padding:18px 18px; text-align:center; transition: border-color .25s, background .25s, transform .25s; }
+.gate h4 { margin:0; font-size:36px; } .gate small { display:block; font-size:26px; color:var(--muted); margin-bottom:10px; }
+.gate .slots { display:flex; flex-wrap:wrap; justify-content:center; gap:6px; height:190px; align-content:center; }
+.gate .s { width:40px; height:40px; border-radius:7px; background:#e6e3db; transition: background .2s, transform .2s; }
+.gate .s.full { background:var(--acc); }
+.gate .s.stolen { background:var(--bad); }
+.gate .count { margin-top:8px; font: 800 36px Consolas, Menlo, monospace; }
+.gate.ok { border-color:var(--good); background:#eef7f0; } .gate.no { border-color:var(--bad); background:#fdecee; transform: scale(1.04); }
+.logbox { position:absolute; background:#fff; border:3px solid var(--line); border-radius:18px; padding:16px 22px; font: 27px/1.42 Consolas, Menlo, monospace; white-space:pre; overflow:hidden; }
+.logbox .y { color:var(--good); font-weight:700; } .logbox .n { color:var(--bad); font-weight:700; } .logbox .h { color:var(--acc); font-weight:800; }
+.tl-axis { stroke:#5f6368; stroke-width:4; }
+.deq { position:absolute; display:flex; gap:10px; align-items:center; font: 700 36px Consolas, Menlo, monospace; }
+.deq span.c { padding:12px 22px; border:3px solid var(--acc); border-radius:12px; background:#fff; transition: all .4s; }
+.deq span.c.go { opacity:0; transform: translateX(-60px); }
+.deq em { font: 800 32px "Segoe UI"; font-style:normal; color:var(--muted); margin-right:8px; }
+.deq .side { font: 800 30px "Segoe UI"; color:#d97706; }
+/* the machine: the limiter's memory, painted from the real trace */
+.mach { height:980px; }
+.mach > div, .mach > svg { position:absolute; }
+.m-call { font: 700 31px Consolas, Menlo, monospace; background:#fff; border:3px solid var(--acc); border-radius:12px; padding:8px 18px; width:900px; box-sizing:border-box; white-space:nowrap; }
+.m-path { display:flex; gap:12px; align-items:center; font: 700 30px Consolas, Menlo, monospace; }
+.m-path span.pc { padding:6px 20px; border:3px solid #c9ced6; border-radius:12px; background:#fff; transition: all .25s; }
+.m-path span.pc.lit { border-color:#d97706; background:#fff1cc; }
+.m-path i { font-style:normal; color:var(--muted); font-weight:800; }
+.lrow { width:900px; }
+.lrow .lh { display:flex; justify-content:space-between; font: 700 27px Consolas, Menlo, monospace; color:var(--muted); margin-bottom:4px; transition: color .2s; }
+.lrow .cn { color:var(--fg); }
+.lrow.ok .lh, .lrow.ok .cn { color:var(--good); } .lrow.no .lh, .lrow.no .cn { color:var(--bad); }
+.lrow.now .lh { color:#b35c00; }
+.sls { display:flex; flex-wrap:wrap; gap:5px; }
+.sl { width:84px; height:46px; box-sizing:border-box; border:3px dashed #d4d7dc; border-radius:9px; display:flex; align-items:center; justify-content:center; font: 700 25px Consolas, Menlo, monospace; background:#fff; transition: all .3s; }
+.sl.full { border:3px solid var(--acc); background:#e8eefb; color:var(--acc); }
+.sl.exp { border:3px solid var(--bad); background:#fdecee; color:var(--bad); }
+.sl.chk { outline:4px solid #d97706; }
+.lrow.no .sl.full { border-color:var(--bad); background:#fdecee; color:var(--bad); }
+.m-calc { width:640px; box-sizing:border-box; min-height:84px; background:#fff; border:3px solid var(--line); border-radius:12px; padding:10px 16px; font: 700 29px/1.25 Consolas, Menlo, monospace; }
+.m-res { width:240px; height:84px; box-sizing:border-box; border-radius:12px; background:#fff; border:3px solid var(--line); display:flex; align-items:center; justify-content:center; font: 800 42px Consolas, Menlo, monospace; color:var(--muted); }
+.m-res.y { background:#1a7f37; border-color:#1a7f37; color:#fff; } .m-res.n { background:#cf222e; border-color:#cf222e; color:#fff; }
+.m-tl { width:900px; height:200px; }
+/* parts */
+.part { font: 700 34px/1.5 Consolas, Menlo, monospace; }
+.panel2 { background:#fff; border:3px solid var(--line); border-radius:16px; padding:14px 20px; font: 28px/1.4 Consolas, Menlo, monospace; }
+.panel2 h4 { font: 800 28px "Segoe UI"; margin:0 0 8px; color:var(--muted); }
+.tlbar { display:flex; gap:6px; }
+.tlbar div { opacity:0; transition: opacity .4s; height:190px; border-radius:14px; color:#fff; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; font-size:27px; font-weight:800; padding:4px; line-height:1.2; }
+.tlbar div.in { opacity:1; } .tlbar small { font-size:25px; font-weight:600; margin-top:6px; }
+.rbox { background:#fff; border:4px solid var(--acc); border-radius:20px; padding:18px 22px; width:480px; box-sizing:border-box; }
+.rbox h4 { margin:0 0 10px; font-size:36px; }
+.rbox .k { font: 700 25px/1.6 Consolas, Menlo, monospace; padding:2px 10px; border-radius:8px; margin:4px 0; }
+.rbox .k.a { background:#e8eefb; color:var(--acc); } .rbox .k.b { background:#eee2ff; color:#8250df; } .rbox .k.c { background:#e6f4ea; color:var(--good); }
+.rbox.hot { border-color:var(--bad); background:#fdecee; }
+.rrow { display:grid; grid-template-columns:790px 80px 840px; align-items:center; background:#fff; border:3px solid var(--line); border-radius:18px; padding:24px 30px; font-size:38px; font-weight:700; }
+.rrow code { font: 700 30px Consolas, Menlo, monospace; color:#8a4b00; background:#fff1cc; padding:6px 12px; border-radius:8px; }
+.rrow .arr { font-size:50px; color:#d97706; text-align:center; font-weight:800; }
+.fullc { position:absolute; top:60px; background:#fff; border:3px solid var(--line); border-radius:14px; padding:10px 0; font: 25px/1.42 Consolas, Menlo, monospace; width:940px; }
+.fullc .ln { padding:0 14px; white-space:pre; border-left:7px solid transparent; transition: background .3s, opacity .3s; }
+.fullc .ln.lit { background:#fff1cc; border-left-color:#d97706; }
+.fullc.focus .ln:not(.lit) { opacity:.38; }
+.cost { display:grid; grid-template-columns:600px 1040px; align-items:center; background:#fff; border:3px solid var(--line); border-radius:18px; padding:30px 30px; font-size:40px; }
+.cost b { color:var(--good); }
+</style>
+</head>
+<body>
+<script>
+const CH = Chapters(['What is it?', 'Problem', 'Why', 'Plan', 'Setup', 'Look', 'Commit', 'Examples', 'Threads', 'Tests', 'Many servers', 'Full code']);
+const go = (o, c) => { clearLinks(); o.show(); CH.set(c); };
+const LIM = { user: 3, team: 10, company: 20 }, WINDOW = 600;
+const GATE_DEFS = [['user', 'User'], ['team', 'Team'], ['company', 'Company']];
+const XS = [400, 790, 1180];
+
+function gates(d, y, xs = XS, names = { user: 'u1', team: 't1', company: 'c1' }, n = {}) {
+  const G = {};
+  GATE_DEFS.forEach(([k, label], i) => {
+    const g = block(d, 'gate', xs[i], y, `<h4>${label}</h4><small class="nm">${names[k]}</small><div class="slots">${'<span class="s"></span>'.repeat(LIM[k])}</div><div class="count">0 / ${LIM[k]}</div>`);
+    G[k] = { el: g, limit: LIM[k], slots: [...g.querySelectorAll('.s')], count: g.querySelector('.count'), nm: g.querySelector('.nm') };
+  });
+  const api = {
+    set(k, v, cls = 'full') { const g = G[k]; g.slots.forEach((s, i) => { s.className = 's' + (i < v ? ' ' + cls : ''); }); g.count.textContent = `${v} / ${g.limit}`; },
+    state(k, cls) { G[k].el.classList.remove('ok', 'no'); if (cls) G[k].el.classList.add(cls); },
+    clear() { Object.keys(G).forEach(k => api.state(k, '')); },
+    name(k, v) { G[k].nm.textContent = v; },
+  };
+  Object.entries(n).forEach(([k, v]) => api.set(k, v));
+  return api;
+}
+function anchors(d, y, xs = XS) { GATE_DEFS.forEach(([k], i) => d.node('g_' + k, xs[i] + 165, y, null, '', '', { w: 2, h: 2 })); }
+
+Title({ num: 3, name: 'Hierarchical rate limiter', sub: 'From the problem, to the picture, to every line of code', phase: '' });
+const TF = titleFigure('Coding walkthrough 3 of 3', 980);
+[['u', 'User', 380, 760], ['t', 'Team', 380, 520], ['c', 'Company', 380, 280]].forEach(([k, l, x, y]) => TF.node(k, x, y, 'gate', l, '', { w: 170 }));
+TF.node('src', 380, 990, null, '', '', { w: 2, h: 2 });
+TF.N.src.g.style.opacity = 0; TF.link('u', 't'); TF.link('t', 'c');
+const tfLoop = setInterval(async () => {
+  const stop = Math.random(); await TF.send('src', 'u', { dur: 380, r: 13, color: 'good' });
+  if (stop < .2) { TF.tag('u', 'no', 'bad'); return; }
+  await TF.send('u', 't', { dur: 380, r: 13, color: 'good' });
+  if (stop < .4) { TF.tag('t', 'no', 'bad'); return; }
+  await TF.send('t', 'c', { dur: 380, r: 13, color: 'good' });
+  if (stop < .55) TF.tag('c', 'no', 'bad');
+}, 700);
+
+// ==================================================================== 0. the words
+const NO = Stage('noti', { caption: ['A notification', 'A message an app sends you'] });
+const phone = block(NO, 'phone', 1000, 240, Array(13).fill(0).map((_, i) => `<div class="nf">${['New comment', 'Build failed', 'New comment', 'Reminder', 'Build failed'][i % 5]}</div>`).join(''));
+const nfBig = block(NO, 'bigline fade', 120, 420, 'Too many, and people get annoyed.<br><br><span style="color:var(--bad)">One bug can spam everyone.</span>', 800);
+window.D1 = async () => { clearInterval(tfLoop); go(NO, 0); await sleep(3200); nfBig.classList.add('in'); for (const n of phone.children) { n.classList.add('in'); await sleep(520); } };
+
+const LM = Stage('lim', { caption: ['A rate limiter', 'The code that says no'] });
+LM.node('app', 280, 560, 'server', 'App', 'wants to send', { w: 280 }); LM.node('g', 960, 560, 'gate', 'Rate limiter', 'yes or no?', { w: 300 }); LM.node('ph', 1640, 560, 'user', 'Person', '', { w: 240 });
+LM.link('app', 'g'); LM.link('g', 'ph');
+window.D2 = async () => {
+  go(LM, 0); await sleep(1500);
+  for (const yes of [1, 1, 1, 0, 0]) { await LM.send('app', 'g', { dur: 750, r: 15 }); if (yes) await LM.send('g', 'ph', { dur: 750, r: 15, color: 'good' }); else { LM.tag('g', 'no', 'bad'); await sleep(600); } }
+};
+
+const LW = Stage('limt', { caption: ['A limit has two parts', ''] });
+const lw1 = block(LW, 'bigline', 110, 240, '<span style="font-size:90px"><span style="color:var(--acc)">3 notifications</span> per <span id="lwW">10 minutes</span></span>', 1700);
+shape(LW.bg, 'line', { x1: 200, y1: 720, x2: 1720, y2: 720, class: 'tl-axis' });
+LW.text(200, 780, 'time', { size: 32, color: 'muted', anchor: 'start' });
+const lwRect = shape(LW.bg, 'rect', { x: 700, y: 520, width: 0, height: 220, rx: 14, fill: 'rgba(36,86,199,.12)', stroke: '#2456c7', 'stroke-width': 4 });
+const lwLab = LW.text(1000, 495, '', { size: 44, color: 'acc' });
+[820, 1000, 1200].forEach(x => shape(LW.fx, 'circle', { cx: x, cy: 670, r: 20, fill: '#2456c7' }));
+window.D3 = async () => { go(LW, 0); await sleep(5400); lwRect.style.transition = 'width .8s'; lwRect.setAttribute('width', 600); document.getElementById('lwW').style.color = '#d97706'; lwLab.textContent = 'the window'; };
+
+const OR = Stage('org', { caption: ['Hierarchical', 'Levels, nested inside each other'] });
+OR.node('c1', 960, 300, 'building', 'Company', '20 in 10 minutes', { w: 300, hidden: true });
+OR.node('t1', 620, 560, 'users', 'Team', '10 in 10 minutes', { w: 270, hidden: true });
+OR.node('t2', 1300, 560, 'users', 'Team', '10 in 10 minutes', { w: 270, hidden: true });
+[['u1', 340], ['u2', 620], ['u3', 900]].forEach(([k, x]) => { OR.node(k, x, 830, 'user', 'User', '3 in 10 minutes', { w: 230, hidden: true }); OR.link('t1', k); });
+OR.node('u4', 1300, 830, 'user', 'User', '3 in 10 minutes', { w: 230, hidden: true }); OR.link('t2', 'u4');
+OR.link('c1', 't1'); OR.link('c1', 't2');
+window.D4 = async () => {
+  go(OR, 0); OR.popAll(['c1', 't1', 't2', 'u1', 'u2', 'u3', 'u4'], 700); await sleep(9500);
+  ['u1', 'u2', 'u3'].forEach(k => OR.send(k, 't1', { dur: 900, r: 13, color: 'warn' })); await sleep(2600); OR.send('t1', 'c1', { dur: 900, r: 13, color: 'warn' }); OR.send('t2', 'c1', { dur: 900, r: 13, color: 'warn' });
+};
+
+const A3 = Stage('all3', { caption: ['Every level must allow it', 'The user has room. The team doesn\'t'] });
+const a3 = gates(A3, 300, XS, undefined, { user: 1, team: 10, company: 15 });
+anchors(A3, 470);
+A3.node('who', 200, 470, 'user', 'u1', '', { w: 150 }); A3.node('out', 1700, 470, 'bell', 'Send', '', { w: 150 });
+window.D5 = async () => {
+  go(A3, 0); await sleep(2400);
+  await A3.send('who', 'g_user', { dur: 800, r: 16 }); a3.state('user', 'ok'); await sleep(500);
+  await A3.send('g_user', 'g_team', { dur: 800, r: 16 }); a3.state('team', 'no'); A3.tag('g_team', 'full', 'bad', -210); A3.tone('out', 'muted');
+};
+
+// ==================================================================== 1. the problem
+const PR = Stage('prompt', { caption: ['', ''] });
+block(PR, 'quote', 110, 70, 'Write one method: may this notification be sent?', 1700);
+block(PR, 'sig', 110, 230, 'should_send_notifications(user_id, timestamp) → <b>True or False</b>', 1700);
+const pr2 = block(PR, 'dicts fade', 110, 390, 'user_to_team &nbsp;&nbsp;&nbsp;= {"u1": "t1", "u2": "t1"}<br>team_to_company = {"t1": "c1"}', 1700);
+const pr3 = block(PR, 'chipr fade', 110, 590, '<span><b>3</b> per user</span><span><b>10</b> per team</span><span><b>20</b> per company</span><span>in any <b>600</b> seconds</span>', 1700);
+const pr4 = block(PR, 'bigline fade', 110, 760, 'A refused send counts <span style="color:var(--bad)">nowhere</span>.<br>Timestamps never go backward.', 1700);
+window.P1 = () => go(PR, 1);
+window.P2 = () => pr2.classList.add('in');
+window.P3 = () => pr3.classList.add('in');
+window.P4 = () => pr4.classList.add('in');
+
+const R = Stage('run', { caption: ['Example 1', 'One user'] });
+const RX = [70, 410, 750];
+const rG = gates(R, 260, RX);
+const rLog = block(R, 'logbox', 1120, 240, '', 740); rLog.style.height = '770px';
+const rNote = block(R, 'bigv fade', 70, 680, '', 1020);
+function sendRow(c, ms) {
+  rG.name('user', c.user); rG.name('team', c.team); rG.name('company', c.company);
+  ['user', 'team', 'company'].forEach(k => rG.set(k, c.after[k].length)); rG.clear();
+  if (c.ok) ['user', 'team', 'company'].forEach(k => rG.state(k, 'ok')); else rG.state(c.looks[c.looks.length - 1].level, 'no');
+  const why = c.ok ? '' : ' ' + c.looks[c.looks.length - 1].level;
+  rLog.innerHTML += `<div>${c.user.padEnd(3)} t=${String(c.t).padEnd(4)}${c.ok ? '<span class="y">True</span>' : `<span class="n">False${why}</span>`}</div>`;
+  return sleep(ms);
+}
+window.E1 = async () => { go(R, 1); await sleep(1600); rLog.innerHTML = '<div class="h">Example 1</div>'; await sleep(1400); for (const c of T1.slice(0, 3)) await sendRow(c, 1000); };
+window.E2 = async () => { await sendRow(T1[3], 1000); };
+window.E3 = async () => { rNote.innerHTML = '601 − 1 = 600: expired'; rNote.classList.add('in'); await sleep(5000); await sendRow(T1[4], 2200); await sendRow(T1[5], 800); };
+window.E4 = async () => {
+  R.cap('Example 2', 'Five users on one team'); rNote.classList.remove('in'); rLog.innerHTML = '<div class="h">Example 2</div>'; rG.clear();
+  for (const c of T2.slice(0, 10)) await sendRow(c, 520);
+  await sleep(3200); await sendRow(T2[10], 300); rNote.innerHTML = 'Refused by the team. u1 has only sent 2.'; rNote.classList.add('in');
+};
+window.E5 = async () => { rNote.innerHTML = '601 − 1 = 600: the first send expired'; await sleep(2400); await sendRow(T2[11], 500); };
+
+// ==================================================================== 2. why
+const X0 = 180, PX = 1.3, tx = t => X0 + t * PX;
+const W = Stage('fixed', { caption: ['A fixed window', 'One counter, reset to zero every 10 minutes'] });
+shape(W.bg, 'line', { x1: X0, y1: 660, x2: tx(1200), y2: 660, class: 'tl-axis' });
+[0, 600, 1200].forEach(t => { shape(W.bg, 'line', { x1: tx(t), y1: 340, x2: tx(t), y2: 700, stroke: '#8a8f98', 'stroke-width': 3, 'stroke-dasharray': '8 8' }); W.text(tx(t), 750, `${t} s`, { size: 32, color: 'muted' }); });
+W.text(tx(600), 322, 'reset', { size: 36, color: 'muted' });
+const drop = (t, y, color) => shape(W.fx, 'circle', { cx: tx(t), cy: y, r: 15, fill: color });
+window.B1 = async () => {
+  go(W, 2); await sleep(5000);
+  for (const t of [80, 180, 280]) { drop(t, 620, '#2456c7'); await sleep(650); }
+  drop(380, 620, '#cf222e'); W.text(tx(380), 575, 'limit 3: no', { size: 30, color: 'bad' });
+};
+window.B2 = async () => {
+  W.cap('The catch: a burst around the reset', '3 just before, 3 just after');
+  [...W.fx.querySelectorAll('circle')].forEach(c => { c.style.opacity = .2; }); [...W.fx.querySelectorAll('text')].forEach(c => { if (c.textContent.startsWith('limit')) c.style.opacity = 0; });
+  await sleep(1000);
+  for (const [t, y] of [[570, 620], [582, 575], [594, 530]]) { drop(t, y, '#bf8700'); await sleep(420); }
+  await sleep(400); for (const [t, y] of [[606, 620], [618, 575], [630, 530]]) { drop(t, y, '#bf8700'); await sleep(420); }
+  shape(W.fx, 'rect', { x: tx(545), y: 495, width: 110 * PX, height: 155, rx: 14, fill: 'none', stroke: '#cf222e', 'stroke-width': 6 });
+  W.text(960, 850, '6 sends in about a minute, with a limit of 3 in 10 minutes', { size: 44, color: 'bad' });
+};
+
+const S = Stage('slide', { caption: ['A sliding window', 'Look back 600 seconds from now. Count what\'s inside'] });
+shape(S.bg, 'line', { x1: X0, y1: 500, x2: tx(1200), y2: 500, class: 'tl-axis' });
+[0, 300, 600, 900, 1200].forEach(t => S.text(tx(t), 555, `${t} s`, { size: 30, color: 'muted' }));
+const win = shape(S.bg, 'rect', { x: tx(0), y: 340, width: 0, height: 180, rx: 14, fill: 'rgba(36,86,199,.12)', stroke: '#2456c7', 'stroke-width': 4 });
+const winLab = S.text(tx(0), 322, '', { size: 32, color: 'acc' });
+const deq = block(S, 'deq', 180, 620, '<em>accepted sends</em>');
+const stamps = [];
+function setWin(now) { const a = Math.max(0, now - WINDOW); win.setAttribute('x', tx(a)); win.setAttribute('width', (now - a) * PX); winLab.setAttribute('x', tx((a + now) / 2)); winLab.textContent = `now = ${now}`; }
+function addStamp(t) { const c = shape(S.fx, 'circle', { cx: tx(t), cy: 450, r: 16, fill: '#2456c7' }); const b = document.createElement('span'); b.className = 'c'; b.textContent = t; deq.append(b); stamps.push({ t, c, b }); }
+function evict(now) { while (stamps.length && now - stamps[0].t >= WINDOW) { const s = stamps.shift(); s.c.setAttribute('fill', '#c9ced6'); s.b.classList.add('go'); setTimeout(() => s.b.remove(), 450); } }
+async function slideTo(from, to, ms) { const steps = Math.max(1, Math.round(ms / 40)); for (let i = 1; i <= steps; i++) { const now = Math.round(from + (to - from) * i / steps); setWin(now); evict(now); await sleep(40); } }
+const dq2 = block(S, 'bigv fade', 180, 740, '<span style="color:#d97706">deque:</span> add on the right, remove from the left, each in <span style="color:var(--good)">one step</span>', 1600);
+const dq3 = block(S, 'bigv fade', 180, 850, '<span style="color:var(--muted)">A plain list: remove the first, and every element has to shift.</span>', 1600);
+window.B3 = async () => { go(S, 2); await sleep(3000); await slideTo(0, 100, 900); addStamp(100); await slideTo(100, 300, 1600); addStamp(300); await slideTo(300, 500, 1600); addStamp(500); };
+window.B4 = async () => { S.cap('Old sends fall out on the left', 'The times are in order, so the oldest is always first'); await slideTo(500, 950, 6000); addStamp(950); };
+window.B5 = async () => { S.cap('A deque', 'Short for double ended queue'); await sleep(3800); dq2.classList.add('in'); await sleep(6000); dq3.classList.add('in'); };
+
+const QS = Stage('questions', { caption: ['Ask before you code', 'Each answer changes the code'] });
+const qr = [['Does a refused send count?', 'No, at no level.'], ['Exactly 600 seconds old?', 'Expired. Only <b>t − s &lt; 600</b> is inside.'], ['Many threads at once?', 'Assume yes. We\'ll come back to it.'], ['An unknown user?', 'Assume it\'s an error.']]
+  .map(([q, a], i) => block(QS, 'qrow fade', 110, 240 + i * 180, `<b>${q}</b><span>${a}</span>`, 1740));
+window.C1 = async () => { go(QS, 2); await sleep(3000); qr[0].classList.add('in'); };
+window.C2 = () => qr[1].classList.add('in');
+window.C3 = async () => { qr[2].classList.add('in'); await sleep(3400); qr[3].classList.add('in'); };
+
+// ==================================================================== 3. the plan
+const B = Stage('bug', { caption: ['The obvious loop has a bug', 'Check and add, level by level'] });
+const bG = gates(B, 270, XS, undefined, { user: 0, team: 10, company: 12 });
+anchors(B, 440);
+B.node('who', 200, 440, 'user', 'u1', '', { w: 150 });
+const bNote = block(B, 'bigv fade', 200, 720, '', 1500);
+async function attempt(n) { await B.send('who', 'g_user', { dur: 620, r: 15 }); bG.set('user', n, 'stolen'); bG.state('user', 'ok'); await sleep(350); await B.send('g_user', 'g_team', { dur: 620, r: 15 }); bG.state('team', 'no'); B.tag('g_team', 'refused', 'bad', -190); await sleep(450); bG.state('user', ''); bG.state('team', ''); }
+window.L1 = async () => { go(B, 3); await sleep(4800); await attempt(1); bNote.innerHTML = 'The count went up, and nothing was sent.'; bNote.classList.add('in'); };
+window.L2 = async () => { await attempt(2); await attempt(3); bNote.innerHTML = '<span style="color:var(--bad)">Now blocked, with zero notifications sent.</span>'; };
+
+const C = Stage('fix', { caption: ['Two moves: look, then commit', 'Change nothing until all three say yes'] });
+const cG = gates(C, 270, XS, undefined, { user: 0, team: 9, company: 12 });
+anchors(C, 440);
+C.node('who', 200, 440, 'user', 'u1', '', { w: 150 }); C.node('out', 1700, 440, 'bell', 'Send', '', { w: 150 });
+const cStep = block(C, 'bigline fade', 200, 720, '', 1500);
+window.L3 = async () => {
+  go(C, 3); cStep.innerHTML = '1. <span style="color:#d97706">Look:</span> is there room at every level?'; cStep.classList.add('in'); await sleep(900);
+  await C.send('who', 'g_user', { dur: 650, r: 15, color: 'warn' }); cG.state('user', 'ok');
+  await C.send('g_user', 'g_team', { dur: 650, r: 15, color: 'warn' }); cG.state('team', 'ok');
+  await C.send('g_team', 'g_company', { dur: 650, r: 15, color: 'warn' }); cG.state('company', 'ok');
+};
+window.L4 = async () => {
+  cStep.innerHTML = '2. <span style="color:var(--good)">Commit:</span> all three go up together.'; await sleep(1800);
+  cG.set('user', 1); cG.set('team', 10); cG.set('company', 13); await sleep(500);
+  await C.send('g_company', 'out', { dur: 800, r: 15, color: 'good' }); C.tone('out', 'good');
+};
+
+// ==================================================================== machine: the limiter's memory, painted from the real trace
+const LV = ['user', 'team', 'company'];
+function machine(d) {
+  const r = block(d, 'mach', 20, 58, `
+    <div class="m-call" style="left:0;top:0"></div>
+    <div class="m-path" style="left:0;top:68px"><span class="pc p-u">u1</span><i>→</i><span class="pc p-t">t1</span><i>→</i><span class="pc p-c">c1</span></div>
+    <div class="lrow r-user" style="left:0;top:138px"><div class="lh"><span class="kn"></span><span class="cn"></span></div><div class="sls">${'<span class="sl"></span>'.repeat(3)}</div></div>
+    <div class="lrow r-team" style="left:0;top:232px"><div class="lh"><span class="kn"></span><span class="cn"></span></div><div class="sls">${'<span class="sl"></span>'.repeat(10)}</div></div>
+    <div class="lrow r-company" style="left:0;top:326px"><div class="lh"><span class="kn"></span><span class="cn"></span></div><div class="sls">${'<span class="sl"></span>'.repeat(20)}</div></div>
+    <div class="m-calc" style="left:0;top:474px"></div>
+    <div class="m-res" style="left:660px;top:474px"></div>
+    <svg class="m-tl" style="left:0;top:580px" viewBox="0 0 900 200"></svg>`, 920);
+  const $ = s => r.querySelector(s);
+  const rows = Object.fromEntries(LV.map(k => [k, { el: $('.r-' + k), kn: $('.r-' + k + ' .kn'), cn: $('.r-' + k + ' .cn'), sl: [...r.querySelectorAll('.r-' + k + ' .sl')] }]));
+  const tl = $('.m-tl'), TX = t => 30 + t * 1.2;
+  const E = { call: $('.m-call'), path: $('.m-path'), calc: $('.m-calc'), res: $('.m-res'), tl, rows, pu: $('.p-u'), pt: $('.p-t'), pc: $('.p-c') };
+  return {
+    E,
+    // s: {c: a traced call, logs:{user,team,company}, now: {level: 'ok'|'no'|'now'}, exp:{level:[t]}, chk:[level, i], calc, res, gone:[t]}
+    paint(s) {
+      const c = s.c;
+      E.call.textContent = `should_send_notifications("${c.user}", ${c.t})`;
+      E.pu.textContent = c.user; E.pt.textContent = c.team; E.pc.textContent = c.company;
+      LV.forEach(k => {
+        const row = rows[k], id = { user: c.user, team: c.team, company: c.company }[k], log = s.logs[k];
+        row.kn.textContent = `("${k}", "${id}")`; row.cn.textContent = `${log.length} / ${LIM[k]}`;
+        row.el.className = 'lrow r-' + k + ((s.now && s.now[k]) ? ' ' + s.now[k] : '');
+        row.sl.forEach((e, i) => {
+          const v = log[i]; e.textContent = v === undefined ? '' : v;
+          e.className = 'sl' + (v === undefined ? '' : ' full') + (s.exp && s.exp[k] && s.exp[k].includes(v) ? ' exp' : '') + (s.chk && s.chk[0] === k && s.chk[1] === i ? ' chk' : '');
+        });
+      });
+      E.calc.innerHTML = s.calc || '';
+      E.res.textContent = s.res === undefined ? '' : s.res ? 'True' : 'False';
+      E.res.className = 'm-res' + (s.res === undefined ? '' : s.res ? ' y' : ' n');
+      const a = Math.max(0, c.t - WINDOW), all = [...new Set(LV.flatMap(k => s.logs[k]))];
+      tl.innerHTML = `<line x1="30" y1="130" x2="880" y2="130" stroke="#5f6368" stroke-width="4"/>` +
+        [0, 200, 400, 600].map(t => `<text x="${TX(t)}" y="170" font-size="26" fill="#7a808a" text-anchor="middle">${t}</text>`).join('') +
+        `<rect x="${TX(a)}" y="50" width="${(c.t - a) * 1.2}" height="96" rx="10" fill="rgba(36,86,199,.12)" stroke="#2456c7" stroke-width="3"/>` +
+        `<text x="${TX(a) + 8}" y="38" font-size="26" font-weight="700" fill="#2456c7">the window, ending at ${c.t}</text>` +
+        (s.gone || []).map(t => `<circle cx="${TX(t)}" cy="108" r="11" fill="#c9ced6"/>`).join('') +
+        all.map(t => `<circle cx="${TX(t)}" cy="108" r="11" fill="#2456c7"/>`).join('');
+    },
+  };
+}
+
+// ==================================================================== 4. setup
+const NS = Split('setup', { size: 24, lines: ['class NotificationLimiter:', '    LIMITS = {"user": 3, "team": 10, "company": 20}', '    WINDOW = 600', '', '    def __init__(self, user_to_team, team_to_company):', '        self.user_to_team = user_to_team', '        self.team_to_company = team_to_company', '        self.sent = defaultdict(deque)    # (level, id) -> times', '        self.lock = threading.Lock()'] });
+const NM = machine(NS.d);
+const C0 = T1[0], EMPTY = { user: [], team: [], company: [] };
+NM.paint({ c: { ...C0, t: 0 }, logs: EMPTY });
+window.N1 = () => { go(NS, 4); NS.step([1, 2], { from: NM.E.rows.user.el, note: 'The limits and the window are <b>constants on the class</b>, so one place holds them, and <code>self.LIMITS</code> reads them.' }); };
+window.N2 = () => { NS.step([5, 6], { from: NM.E.path, note: 'We\'re given two dictionaries. They\'re how we walk from a user, up to a team, up to a company.' }); };
+window.N3 = async () => {
+  NS.step(7, { from: NM.E.rows.team.el, note: 'One log per level. The key is a pair: <code>("user", "u1")</code>.' });
+  await sleep(7000); NS.step(7, { from: NM.E.rows.company.el, note: 'A <b>defaultdict</b> creates the empty deque the first time a key is used, so we never check whether it exists.' });
+};
+window.N4 = () => NS.step(8, { note: 'A lock. We\'ll get to it.' });
+
+// ==================================================================== 5. the walk
+const WK = Split('walk', { size: 25, lines: ['def should_send_notifications(self, user_id, timestamp):', '    team = self.user_to_team[user_id]', '    company = self.team_to_company[team]', '    keys = [("user", user_id),', '            ("team", team),', '            ("company", company)]', '    with self.lock:', '        for key in keys:', '            log = self.sent[key]', '            while log and timestamp - log[0] >= self.WINDOW:', '                log.popleft()', '            if len(log) >= self.LIMITS[key[0]]:', '                return False', '        for key in keys:', '            self.sent[key].append(timestamp)', '        return True'] });
+const WM = machine(WK.d);
+const paintAfter = (c, extra = {}) => WM.paint({ c, logs: c.after, ...extra });
+window.W1 = async () => {
+  go(WK, 5); WM.paint({ c: T1[0], logs: EMPTY }); WK.step(0, { from: WM.E.call, note: 'The very first call: user u1, at time 1.' });
+  await sleep(3400); WK.step([1, 2], { from: WM.E.path, note: 'Walk up the hierarchy, with one dictionary lookup each.' }); WM.E.pu.classList.add('lit');
+  await sleep(1200); WM.E.pt.classList.add('lit'); await sleep(1200); WM.E.pc.classList.add('lit');
+};
+window.W2 = () => { WK.step([3, 4, 5], { from: WM.E.rows.user.el, note: 'Three keys. Each one names a log.' }); [WM.E.pu, WM.E.pt, WM.E.pc].forEach(p => p.classList.remove('lit')); };
+window.W3 = async () => {
+  WM.paint({ c: T1[0], logs: EMPTY, now: { user: 'now' } }); WK.step([7, 8], { from: WM.E.rows.user.el, note: '<b>First move: look.</b> For each key, get its log.' });
+  await sleep(3400); WK.step([9, 10], { note: 'The <code>while</code> loop removes expired sends. There are none yet.' });
+  await sleep(3800); WM.paint({ c: T1[0], logs: EMPTY, now: { user: 'now' }, calc: 'len(log) >= LIMITS["user"]<br>0 >= 3: no' }); WK.step(11, { from: WM.E.calc, note: '<code>key[0]</code> is the first part of the key, <code>"user"</code>, so the limit is 3. Zero isn\'t at it, so go on.' });
+  await sleep(8200); WM.paint({ c: T1[0], logs: EMPTY, now: { user: 'ok' }, calc: '0 >= 3: no' });
+};
+window.W4 = async () => {
+  WM.paint({ c: T1[0], logs: EMPTY, now: { user: 'ok', team: 'ok' }, calc: '0 >= 10: no' }); WK.step(11, { from: WM.E.rows.team.el, note: 'All three said yes.' });
+  await sleep(1800); WM.paint({ c: T1[0], logs: EMPTY, now: { user: 'ok', team: 'ok', company: 'ok' }, calc: '0 >= 20: no' }); WK.step(11, { from: WM.E.rows.company.el });
+};
+window.W5 = async () => {
+  go(WK, 6); WK.step([13, 14], { from: WM.E.rows.user.el, note: '<b>Second move: commit.</b> Add the time to all three logs.' });
+  await sleep(1000); paintAfter(T1[0], { now: { user: 'ok', team: 'ok', company: 'ok' } });
+  await sleep(2600); WK.step(15, { from: WM.E.res, note: 'Then return <code>True</code>.' }); paintAfter(T1[0], { res: true });
+};
+window.W6 = async () => {
+  WK.step([13, 14], { from: WM.E.rows.team.el, note: 'Each log grows by one.' }); await sleep(600);
+  WM.paint({ c: T1[1], logs: T1[1].before }); await sleep(800); paintAfter(T1[1], { res: true }); await sleep(1100); WM.paint({ c: T1[2], logs: T1[2].before }); await sleep(800); paintAfter(T1[2], { res: true });
+};
+window.W7 = async () => {
+  go(WK, 5); const c = T1[3]; WM.paint({ c, logs: c.before, now: { user: 'now' } }); WK.step(7, { from: WM.E.call, note: 'Time 4.' });
+  await sleep(1800); WM.paint({ c, logs: c.before, now: { user: 'no' }, calc: 'len(log) >= LIMITS["user"]<br>3 >= 3: yes, it\'s full' }); WK.step(11, { from: WM.E.rows.user.el, note: 'The user\'s log has three entries, and three is at the limit.' });
+  await sleep(4400); WM.paint({ c, logs: c.before, now: { user: 'no' }, res: false, calc: '3 >= 3: yes, it\'s full' }); WK.step(12, { from: WM.E.res, note: 'Return <code>False</code>, right there.' });
+  await sleep(2600); WK.step([13, 14], { note: '<b>The commit loop never runs</b>, so nothing changes anywhere. That\'s the bug fixed.' });
+};
+window.W8 = async () => {
+  const c = T1[4]; WM.paint({ c, logs: c.before, now: { user: 'now' }, chk: ['user', 0] }); WK.step(9, { from: WM.E.rows.user.el, note: '<code>log[0]</code> is the oldest send. The <code>while</code> loop finally has something to do.' });
+  await sleep(4600); WM.paint({ c, logs: c.before, now: { user: 'now' }, chk: ['user', 0], exp: { user: [1] }, calc: 'timestamp - log[0] >= WINDOW<br>601 - 1 = 600 >= 600: expired' }); WK.step(9, { from: WM.E.calc, note: 'Six hundred is at least the window, so it\'s expired.' });
+  await sleep(5200); WM.paint({ c, logs: { ...c.before, user: [2, 3] }, now: { user: 'now' }, gone: [], calc: '601 - 1 = 600 >= 600: expired' }); WK.step(10, { from: WM.E.rows.user.el, note: '<code>popleft()</code> removes it from the left, in one step.' });
+};
+window.W9 = async () => {
+  const c = T1[4]; WM.paint({ c, logs: { ...c.before, user: [2, 3] }, now: { user: 'now' }, chk: ['user', 0], calc: 'timestamp - log[0] >= WINDOW<br>601 - 2 = 599 >= 600: no, stop' }); WK.step(9, { from: WM.E.calc, note: 'The next oldest is still inside, so the loop stops.' });
+  await sleep(5600); WK.note('It only looks at the front, <b>because the log is in time order</b>.');
+};
+window.W10 = async () => {
+  const c = T1[4], pr = { user: [2, 3], team: [2, 3], company: [2, 3] }; WM.paint({ c, logs: { ...c.before, user: [2, 3] }, now: { user: 'ok' }, calc: '2 >= 3: no' }); WK.step(11, { from: WM.E.rows.user.el, note: 'Two entries, so there\'s room.' });
+  await sleep(2800); WM.paint({ c, logs: pr, now: { user: 'ok', team: 'ok', company: 'ok' }, calc: 'pruned the same way' }); WK.step([8, 9, 10, 11], { from: WM.E.rows.team.el, note: 'The team and company logs get pruned the same way, and all three say yes.' });
+  await sleep(3800); go(WK, 6); paintAfter(c, { res: true, now: { user: 'ok', team: 'ok', company: 'ok' } }); WK.step([13, 14, 15], { from: WM.E.res, note: 'Commit. <code>True</code>.' });
+};
+window.W11 = async () => {
+  go(WK, 7); WK.step([13, 14], { from: WM.E.rows.team.el, note: 'Second example: every call adds to <b>all three levels</b>.' });
+  await sleep(600); for (const c of T2.slice(0, 10)) { paintAfter(c, { res: true }); await sleep(520); }
+};
+window.W12 = async () => {
+  const c = T2[10]; WM.paint({ c, logs: c.before, now: { user: 'ok' }, calc: '2 >= 3: no' }); WK.step(11, { from: WM.E.rows.user.el, note: 'u1 at time 11. The user\'s own log has two, so it passes.' });
+  await sleep(4600); WM.paint({ c, logs: c.before, now: { user: 'ok', team: 'no' }, calc: '10 >= 10: yes, it\'s full', res: false }); WK.step(12, { from: WM.E.rows.team.el, note: 'The team\'s log has ten, so <code>return False</code>.' });
+  await sleep(4400); WK.step(12, { from: WM.E.rows.user.el, note: 'The user\'s log is <b>still two</b>. The look never changes the count.' });
+};
+window.W13 = async () => {
+  const c = T2[11]; WM.paint({ c, logs: c.before, now: { team: 'now' }, chk: ['team', 0], exp: { team: [1], company: [1] }, calc: '601 - 1 = 600 >= 600: expired' }); WK.step([9, 10], { from: WM.E.rows.team.el, note: 'u2 at time 601. The oldest send falls out of the team\'s log.' });
+  await sleep(4600); paintAfter(c, { res: true, now: { user: 'ok', team: 'ok', company: 'ok' }, calc: '9 >= 10: no, so there\'s room' }); WK.step([13, 14, 15], { from: WM.E.res, note: 'There\'s room, so the answer is <code>True</code>.' });
+};
+
+// ==================================================================== 6. threads
+const T = Stage('threads', { caption: ['A thread', 'A separate line of work inside one program'] });
+const tG = block(T, 'gate', 800, 270, `<h4>Company</h4><small>c1</small><div class="slots">${'<span class="s full"></span>'.repeat(19)}<span class="s" id="lastS"></span></div><div class="count" id="tc">19 / 20</div>`);
+T.node('a', 240, 340, 'gear', 'Thread A', '', { w: 190 }); T.node('b', 240, 720, 'gear', 'Thread B', '', { w: 190 }); T.node('g', 965, 430, null, '', '', { w: 2, h: 2 });
+const tNote = block(T, 'bigv fade', 800, 680, '', 1000);
+window.H1 = async () => {
+  go(T, 8); await sleep(7000); T.cap('One slot left', 'Both look. Both see room');
+  await Promise.all([T.send('a', 'g', { dur: 1100, r: 15, label: 'room?' }), T.send('b', 'g', { dur: 1100, r: 15, label: 'room?' })]);
+  await sleep(300); T.tag('a', 'yes', 'good'); T.tag('b', 'yes', 'good'); await sleep(1500);
+  await Promise.all([T.send('a', 'g', { dur: 800, r: 15, color: 'bad', label: 'add' }), T.send('b', 'g', { dur: 800, r: 15, color: 'bad', label: 'add' })]);
+  document.getElementById('lastS').classList.add('stolen'); document.getElementById('tc').textContent = '21 / 20'; tG.classList.add('no');
+  await sleep(1400); T.cap('A race condition', 'The answer depends on who gets there when');
+};
+window.H2 = async () => {
+  T.cap('A lock', 'One thread at a time. Any other thread waits');
+  tG.classList.remove('no'); document.getElementById('lastS').className = 's'; document.getElementById('tc').textContent = '19 / 20';
+  tNote.innerHTML = icon('lock', 70, 'warn') + ' <span style="vertical-align:18px">Thread A holds the lock</span>'; tNote.classList.add('in');
+  T.tone('b', 'muted'); await sleep(3400);
+  await T.send('a', 'g', { dur: 900, r: 15, color: 'good' }); document.getElementById('lastS').className = 's full'; document.getElementById('tc').textContent = '20 / 20';
+  await sleep(1200); tNote.innerHTML = icon('lock', 70, 'warn') + ' <span style="vertical-align:18px">Thread B holds the lock</span>'; T.tone('b', '');
+  await T.send('b', 'g', { dur: 900, r: 15, color: 'warn' }); T.tag('b', 'full: False', 'bad');
+};
+const LK = Split('lockc', { size: 28, lines: ['with self.lock:', '    for key in keys:', '        ...look...', '            return False', '    for key in keys:', '        ...commit...', '    return True'] });
+LK.d.node('a', 220, 280, 'gear', 'Thread A', 'inside', { w: 230, tone: 'good' }); LK.d.node('b', 220, 620, 'gear', 'Thread B', 'waiting', { w: 230, tone: 'muted' });
+const lkI = block(LK.d, 'bigv', 590, 240, icon('lock', 120, 'warn'));
+window.H3 = async () => {
+  go(LK, 8); LK.step(0, { from: lkI, note: '<code>with</code> takes the lock on the way in, and <b>releases it on the way out</b>, even on an early return.' });
+  await sleep(6400); LK.step(3, { from: lkI, note: 'Even from here. So a refused send can\'t leave the lock stuck.' });
+  await sleep(4000); LK.step([0, 1, 2, 3, 4, 5, 6], { from: lkI, note: 'Everything inside happens as one step. That\'s called <b>atomic</b>: no other thread can see it half done.' });
+};
+
+// ==================================================================== 7. tests
+const TS = Split('tests', { size: 26, lines: ['times = (1, 2, 3, 4, 601, 602)', 'assert [ask("u1", t) for t in times] == [T, T, T, F, T, T]', 'assert [ask(u, t) for u, t in calls2] == [T] * 10 + [F, T]', '', 'assert ask("z", 2) is False', 'assert len(L.sent[("user", "z")]) == 0', '', 'assert ask("c0", 1) is False', '', 'assert ask("u1", 599) is False', 'assert ask("u1", 600) is True', '', 'assert sum(res) == 20'] });
+const tcs = ['Reported example 1', 'Reported example 2', 'A refused send leaves no trace', 'The company limit', 'The exact boundary', '50 threads: exactly 20 get through'].map((t, i) => block(TS.d, 'bigv fade', 60, 170 + i * 120, `<span style="color:var(--good)">✓</span> ${t}`, 880));
+window.Q1 = async () => {
+  go(TS, 9); TS.note('<code>ask</code> is <code>L.should_send_notifications</code>, and <code>T, F = True, False</code>, to keep the lines short.');
+  for (const [i, ln, w] of [[0, [0, 1], 2600], [1, [2], 2200], [2, [4, 5], 3600], [3, [7], 2600], [4, [9, 10], 2000]]) { TS.hl(ln); tcs[i].classList.add('in'); await sleep(w); }
+};
+window.Q2 = () => { TS.hl(12); tcs[5].classList.add('in'); };
+const HR = Stage('hour', { caption: ['How it fits in the hour', 'The order you\'d type it'] });
+const seg = [['Clarify', 5, '#5f6368'], ['One level, sliding', 10, '#2456c7'], ['Three levels, look then commit', 15, '#1a7f37'], ['The lock', 5, '#bf8700'], ['Tests, edge cases', 5, '#bf8700'], ['Design follow-ups', 20, '#8250df']];
+const tl = block(HR, 'tlbar', 110, 340, seg.map(([n, m, c]) => `<div style="flex:${m};background:${c}">${n}<small>${m} min</small></div>`).join(''), 1700);
+const hrN = block(HR, 'bigline fade', 110, 640, 'Run the reported examples after each step, so a bug can only be in what you just wrote.', 1700);
+window.Q3 = async () => { go(HR, 9); for (const c of tl.children) { await sleep(2600); c.classList.add('in'); } hrN.classList.add('in'); };
+
+// ==================================================================== 8. many servers
+const D = Stage('dist', { caption: ['Many servers', 'A lock only protects one program'] });
+['1', '2', '3'].forEach((n, i) => { D.node('s' + n, 330, 300 + i * 270, 'server', 'Server ' + n, 'counts 7', { w: 210 }); });
+D.node('store', 1250, 570, 'db', 'Shared logs', 'Redis', { w: 280, hidden: true });
+const dNote = block(D, 'bigv fade', 660, 500, '<span style="color:var(--bad)">Each thinks 7 of 20. Together: 21.</span>', 1100);
+const dFix = block(D, 'bigv fade', 760, 760, 'A Lua script: prune, look at all three, add to all or none. Redis runs it as one step.', 1050);
+let stopD = () => {};
+window.U1 = async () => { go(D, 10); await sleep(3600); ['s1', 's2', 's3'].forEach(k => D.tone(k, 'warn')); dNote.classList.add('in'); };
+window.U2 = async () => {
+  D.cap('Move the logs out', 'Every server asks the same store');
+  dNote.classList.remove('in'); D.pop('store'); ['1', '2', '3'].forEach(n => { D.link('s' + n, 'store'); D.tone('s' + n, ''); D.rename('s' + n, null, 'no logs'); });
+  const stops = [650, 800, 950].map((e, i) => D.stream('s' + (i + 1), 'store', { every: e, dur: 800, color: 'good' })); stopD = () => stops.forEach(s => s());
+  await sleep(6000); dFix.classList.add('in');
+};
+const SH = Stage('shard', { caption: ['Redis split across machines', 'One script must reach all its keys on one machine'] });
+const shB = [['Machine 1', [['a', 'user:u1:{c1}'], ['a', 'team:t1:{c1}'], ['a', 'company:{c1}']]], ['Machine 2', [['b', 'user:u9:{c2}'], ['b', 'team:t5:{c2}'], ['b', 'company:{c2}']]], ['Machine 3', [['c', 'user:u4:{c3}'], ['c', 'team:t8:{c3}'], ['c', 'company:{c3}']]]]
+  .map(([n, ks], i) => block(SH, 'rbox fade', 110 + i * 600, 300, `<h4>${n}</h4>` + ks.map(([c, k]) => `<div class="k ${c}">${esc(k)}</div>`).join(''), 500));
+const shN = block(SH, 'bigv fade', 110, 660, 'All of a company\'s keys go together.', 1700);
+const shH = block(SH, 'bigv fade', 110, 760, '<span style="color:var(--bad)">A very busy company can overload its machine.</span>', 1700);
+window.U3 = async () => { stopD(); go(SH, 10); await sleep(5000); for (const b of shB) { b.classList.add('in'); await sleep(500); } shN.classList.add('in'); await sleep(2600); shH.classList.add('in'); shB[0].classList.add('hot'); };
+const M = Cards('more', { head: 'More follow-ups', items: [
+  { icon: 'retry', title: 'Retries', text: 'Same request id: return the first answer, and count nothing.' },
+  { icon: 'power', title: 'Redis is down', text: 'Allow or refuse? A product choice. Say which, and why.' },
+  { icon: 'scaleup', title: 'Limits in the thousands', text: 'Logs get big. Switch to approximate counters.' },
+] });
+window.U4 = () => { go(M, 10); setTimeout(() => M.reveal(0), 300); };
+window.U5 = async () => { M.reveal(1); await sleep(6400); M.reveal(2); };
+
+// ==================================================================== 9. the full solution
+const FC = document.createElement('section'); FC.id = 'fullcode'; FC.className = 'scene'; document.body.append(FC);
+const makeCol = (lines, x) => { const b = document.createElement('div'); b.className = 'fullc'; b.style.left = x + 'px'; FC.append(b);
+  return { b, lines, L: lines.map(t => { const e = document.createElement('div'); e.className = 'ln'; e.innerHTML = py(t) || ' '; b.append(e); return e; }) }; };
+const COLS = [makeCol(FULL.left, 12), makeCol(FULL.right, 966)];
+const litIdx = (col, a, b) => { for (let i = a; i <= b; i++) if (COLS[col].lines[i].trim()) COLS[col].L[i].classList.add('lit'); };
+const startLit = () => COLS.forEach(c => { c.L.forEach(l => l.classList.remove('lit')); c.b.classList.add('focus'); });
+const at = (col, s) => COLS[col].lines.findIndex(l => l.trim().startsWith(s));
+window.S1 = () => { clearLinks(); show('fullcode'); CH.set(11); COLS.forEach(c => c.b.classList.remove('focus')); };
+window.S2 = () => { startLit(); litIdx(0, at(0, 'class Notification'), COLS[0].lines.length - 1); };
+window.S3 = () => { startLit(); litIdx(1, at(1, 'team ='), at(1, '("company"')); };
+window.S4 = () => { startLit(); litIdx(1, at(1, 'with self.lock'), at(1, 'return False')); };
+window.S5 = () => { startLit(); litIdx(1, at(1, 'return False') + 1, COLS[1].lines.length - 1); };
+
+const CS = Stage('costs', { caption: ['What it costs', ''] });
+const csr = [['Time per call', 'A few steps, on average: each send is removed <b>at most once</b>'], ['Memory per log', 'Never more than its limit: <b>3, 10, or 20</b>']].map(([a, b], i) => block(CS, 'cost fade', 110, 340 + i * 220, `<span style="font-weight:800">${a}</span><span>${b}</span>`, 1700));
+window.S6 = async () => { go(CS, 11); await sleep(800); csr[0].classList.add('in'); await sleep(5000); csr[1].classList.add('in'); };
+
+const RC = Stage('recap', { caption: ['', ''] });
+const rr = [['The window sliding, old sends falling out', 'while ...: log.popleft()'], ['A level refusing', 'if len(log) >= limit: return False'], ['All levels going up together', 'for key in keys: ...append(timestamp)'], ['Two threads taking turns', 'with self.lock:']]
+  .map(([a, b], i) => block(RC, 'rrow fade', 110, 170 + i * 200, `<span>${a}</span><span class="arr">→</span><span><code>${esc(b)}</code></span>`, 1710));
+window.R1 = () => { go(RC, 11); setTimeout(() => rr[0].classList.add('in'), 2200); };
+window.R2 = async () => { rr[1].classList.add('in'); await sleep(2600); rr[2].classList.add('in'); };
+window.R3 = () => rr[3].classList.add('in');
+
+const Z = Say('say', 'Look at every level, then commit to every level, inside one atomic step.');
+document.querySelector('#say .kicker').textContent = 'The one line to remember';
+window.Z1 = () => go(Z, 11);
+</script>
+</body>
+</html>

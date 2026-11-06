@@ -20,7 +20,7 @@ with sync_playwright() as p:
     for i, step in enumerate(sys.argv[2:]):
         fn, _, ms = step.partition(":")
         if fn != "-":
-            pg.evaluate(f"window.{fn} && window.{fn}()")
+            pg.evaluate(f"setTimeout(() => window.{fn} && window.{fn}(), 0)")
         pg.wait_for_timeout(int(ms or 1500))
         pg.screenshot(path=str(out / f"shot_{i:02d}.png"))
         print(out / f"shot_{i:02d}.png")

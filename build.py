@@ -5,6 +5,7 @@ Supports a small markdown subset plus three extras:
   ```flow      stacked boxes (one line per row, " | " splits a row)
   ::: answer   a hidden answer revealed by "See answer"
   ::: reveal X a hidden block revealed by a button labeled X (later stages of coding questions)
+  ::: video n  a video on the page (videos/n.mp4), loaded only when played
   {#id}        an explicit heading id
 Tables become cards, so nothing scrolls sideways on a phone.
 """
@@ -208,6 +209,12 @@ def render(lines, toc, with_visuals=False):
                 out.append(
                     f'<details class="answer reveal"><summary>{inline(args)}</summary>'
                     f'<div class="answer-body">{inner}</div></details>'
+                )
+            elif kind == "video":
+                # ::: video name: a video on the page, loaded only when played
+                out.append(
+                    f'<video class="cc-video" controls playsinline preload="none" poster="videos/{args.strip()}.jpg">'
+                    f'<source src="videos/{args.strip()}.mp4" type="video/mp4"></video>'
                 )
             elif kind == "mock":
                 # ::: mock name | Label, then "- m:ss Chapter" lines: a hidden video with chapter jumps
@@ -432,7 +439,7 @@ def build_print():
         '<ol><li><a href="#part-index">Framework</a>: the six phases in 60 minutes</li>'
         '<li><a href="#part-components">Components</a>: the 23 parts you need, drawn</li>'
         '<li><a href="#part-questions">Sample questions</a>: 8 prompts with worked answers, then 20 follow-up drills</li>'
-        '<li><a href="#part-coding">Coding questions</a>: 8 pairing problems in stages, with answer keys</li></ol></section>'
+        '<li><a href="#part-coding">Coding questions</a>: 8 pairing problems in stages with answer keys, plus 3 with video walkthroughs</li></ol></section>'
     )
     css = (ROOT / "style.css").read_text(encoding="utf-8")
     css = strip_dark(css)

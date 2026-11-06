@@ -1,0 +1,421 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="color-scheme" content="light">
+<title>Repository Merkle tree: walkthrough</title>
+<link rel="stylesheet" href="../lib/lecture.css">
+<link rel="stylesheet" href="../lib/walk.css">
+<script src="../lib/icons.js"></script>
+<script src="../lib/lecture.js"></script>
+<script src="../lib/walk.js"></script>
+<script src="hashes.js"></script>
+<script src="fullcode.js"></script>
+<style>
+.node text.sm { font-family: Consolas, Menlo, monospace; font-size:24px; font-weight:700; fill:var(--acc); }
+.node.good text.sm { fill:var(--good); } .node.bad text.sm { fill:var(--bad); } .node.warn text.sm { fill:var(--warn); }
+.node.hl rect.box { stroke:#d97706; stroke-width:7; fill:#fff8e6; filter:none; }
+.quote { font-size:50px; line-height:1.36; font-weight:600; background:#fff; border-left:12px solid var(--acc); border-radius:14px; padding:30px 40px; }
+.iorow { display:grid; grid-template-columns:520px 500px 80px 560px; align-items:center; font-size:38px; background:#fff; border:3px solid var(--line); border-radius:18px; padding:18px 30px; }
+.iorow code { font: 700 36px Consolas, Menlo, monospace; color:var(--acc); }
+.iorow .arr { font-size:50px; color:var(--muted); font-weight:800; text-align:center; }
+.ex { background:#fff; border:3px solid var(--line); border-radius:20px; padding:20px 34px; font: 32px/1.36 Consolas, Menlo, monospace; }
+.ex h3 { font: 800 40px "Segoe UI"; margin:0 0 8px; }
+.fl { padding:0 14px; border-radius:8px; transition: background .4s, color .4s; white-space:pre; }
+.fl.mod { background:#fff1cc; color:#8a4b00; font-weight:700; } .fl.rem { background:#fdecee; color:var(--bad); font-weight:700; } .fl.add { background:#e6f4ea; color:var(--good); font-weight:700; }
+.ans { font: 700 33px/1.5 Consolas, Menlo, monospace; background:#fff; border:3px solid var(--acc); border-radius:16px; padding:14px 30px; }
+.ans .r { color:var(--bad); } .ans .a { color:var(--good); } .ans .m { color:#8a4b00; }
+.tally { font-size:44px; font-weight:800; background:#fff; border:3px solid var(--line); border-radius:18px; padding:14px 30px; }
+.tally b { color:var(--acc); font-size:56px; font-variant-numeric: tabular-nums; }
+.bigline { font-size:50px; font-weight:800; line-height:1.3; }
+.qrow { display:grid; grid-template-columns:640px 1040px; gap:24px; align-items:center; background:#fff; border:3px solid var(--line); border-radius:18px; padding:18px 30px; font-size:36px; line-height:1.3; }
+.qrow b { color:var(--acc); }
+.nc { background:#fff; border:4px solid var(--acc); border-radius:20px; padding:18px 26px; font: 34px/1.5 Consolas, Menlo, monospace; }
+.nc h4 { font: 800 34px "Segoe UI"; margin:0 0 6px; color:var(--muted); }
+.nc div { padding:2px 12px; border-radius:8px; }
+.fbar { display:flex; gap:6px; }
+.fbar i { width:112px; height:66px; border-radius:8px; background:#dfe3ea; display:flex; align-items:center; justify-content:center; font: 700 22px Consolas, Menlo, monospace; font-style:normal; color:#7a808a; transition: background .25s, color .25s; }
+.fbar i.read { background:#d97706; color:#fff; }
+.fbar i.done { background:#9db7ea; color:#fff; }
+.panel2 { background:#fff; border:3px solid var(--line); border-radius:16px; padding:14px 20px; font: 28px/1.4 Consolas, Menlo, monospace; }
+.panel2 h4 { font: 800 28px "Segoe UI"; margin:0 0 8px; color:var(--muted); }
+.frame { padding:5px 14px; border:3px solid var(--acc); border-radius:10px; margin:6px 0; background:var(--acc-soft); white-space:pre; }
+.frame:last-child { border-color:#d97706; background:#fff1cc; }
+.tilep { display:inline-block; padding:10px 20px; margin:6px 8px 6px 0; font: 700 34px Consolas, Menlo, monospace; border:3px solid #c9ced6; border-radius:10px; background:#fff; transition: all .25s; }
+.tilep.now { background:#fff1cc; border-color:#d97706; } .tilep.done { background:#e8eefb; border-color:#9db7ea; color:var(--acc); }
+.tlbar { display:flex; gap:6px; }
+.tlbar div { opacity:0; transition: opacity .4s; height:190px; border-radius:14px; color:#fff; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; font-size:27px; font-weight:800; padding:4px; line-height:1.2; }
+.tlbar div.in { opacity:1; } .tlbar small { font-size:25px; font-weight:600; margin-top:6px; }
+.rrow { display:grid; grid-template-columns:790px 80px 840px; align-items:center; background:#fff; border:3px solid var(--line); border-radius:18px; padding:24px 30px; font-size:38px; font-weight:700; }
+.rrow code { font: 700 32px Consolas, Menlo, monospace; color:#8a4b00; background:#fff1cc; padding:6px 12px; border-radius:8px; }
+.rrow .arr { font-size:50px; color:#d97706; text-align:center; font-weight:800; }
+.fullc { position:absolute; top:54px; background:#fff; border:3px solid var(--line); border-radius:14px; padding:10px 0; font: 21px/1.3 Consolas, Menlo, monospace; width:940px; }
+.fullc .ln { padding:0 14px; white-space:pre; border-left:7px solid transparent; transition: background .3s, opacity .3s; }
+.fullc .ln.lit { background:#fff1cc; border-left-color:#d97706; }
+.fullc.focus .ln:not(.lit) { opacity:.38; }
+.cost { display:grid; grid-template-columns:330px 900px 380px; align-items:center; background:#fff; border:3px solid var(--line); border-radius:18px; padding:26px 30px; font-size:38px; }
+.cost code { font: 700 38px Consolas, Menlo, monospace; color:var(--acc); }
+.cost b { color:var(--good); text-align:right; }
+</style>
+</head>
+<body>
+<script>
+const CH = Chapters(['What is it?', 'Problem', 'Why', 'Plan', 'build', 'get_hash', 'diff', 'Tests', 'Follow-ups', 'Full code']);
+const go = (o, c) => { clearLinks(); o.show(); CH.set(c); };
+
+// the example repo: key, x, level, label, parent
+const TREE = [['root', 460, 0, '/', null], ['src', 205, 1, 'src', 'root'], ['docs', 535, 1, 'docs', 'root'], ['lib', 800, 1, 'lib', 'root'],
+  ['app', 70, 2, 'app.py', 'src'], ['db', 205, 2, 'db.py', 'src'], ['util', 340, 2, 'util', 'src'], ['io', 340, 3, 'io.py', 'util'],
+  ['am', 470, 2, 'a.md', 'docs'], ['bm', 600, 2, 'b.md', 'docs'], ['xx', 735, 2, 'x.py', 'lib'], ['yy', 865, 2, 'y.py', 'lib']];
+const KIDS = {}; TREE.forEach(([k, , , , p]) => { if (p) (KIDS[p] = KIDS[p] || []).push(k); });
+const isFile = k => !KIDS[k];
+
+function drawTree(d, opts = {}) {
+  const { ox = 0, sx = 1, oy = 100, sy = 118, w = 118, h = 96, pre = '', hashes = null, relabel = {} } = opts;
+  TREE.forEach(([k, x, lvl, label]) => d.node(pre + k, ox + x * sx, oy + lvl * sy, null, relabel[k] || label, hashes ? hashes[k] : ' ', { w, h }));
+  TREE.forEach(([k, , , , p]) => { if (p) d.link(pre + p, pre + k); });
+}
+
+Title({ num: 1, name: 'Repository Merkle tree', sub: 'From the problem, to the picture, to every line of code', phase: '' });
+const TF = titleFigure('Coding walkthrough 1 of 3');
+[['r', 380, 300], ['a', 190, 540], ['b', 570, 540], ['c', 80, 780], ['d', 300, 780], ['e', 480, 780], ['f', 680, 780]].forEach(([k, x, y]) => TF.node(k, x, y, null, '', '', { w: 110, h: 76 }));
+[['r', 'a'], ['r', 'b'], ['a', 'c'], ['a', 'd'], ['b', 'e'], ['b', 'f']].forEach(([p, c]) => TF.link(p, c));
+const tfLoop = setInterval(async () => {
+  const leaf = ['c', 'd', 'e', 'f'][Math.floor(Math.random() * 4)], mid = 'cd'.includes(leaf) ? 'a' : 'b';
+  await TF.send(leaf, mid, { dur: 500, color: 'good', r: 12 }); await TF.send(mid, 'r', { dur: 500, color: 'good', r: 12 });
+}, 650);
+
+// ==================================================================== 0. what is a Merkle tree?
+const DN = Stage('defn', { caption: ['', ''] });
+block(DN, 'quote', 110, 80, 'A <b>Merkle tree</b> is a tree where every node stores a <b>fingerprint</b> of everything below it.', 1700);
+drawTree(DN, { ox: 480, oy: 400, sy: 170, w: 124 });
+window.D1 = async () => {
+  clearInterval(tfLoop); go(DN, 0); await sleep(3500);
+  for (const k of ['app', 'db', 'io', 'am', 'bm', 'xx', 'yy', 'util', 'src', 'docs', 'lib', 'root']) { DN.rename(k, null, H.old[k]); DN.tone(k, 'good'); await sleep(420); }
+};
+
+const M1 = Stage('mk1', { caption: ['A file\'s fingerprint', 'The hash of its content'] });
+M1.node('docs', 960, 240, 'box', 'docs', '?', { w: 240 });
+M1.node('am', 520, 650, 'doc', 'a.md', ' ', { w: 240 }); M1.node('bm', 1400, 650, 'doc', 'b.md', ' ', { w: 240 });
+M1.node('ca', 520, 900, null, '"# A"', '', { w: 220, h: 90 }); M1.node('cb', 1400, 900, null, '"# B"', '', { w: 220, h: 90 });
+M1.link('ca', 'am'); M1.link('cb', 'bm');
+M1.node('fn', 960, 450, 'gear', 'SHA-256', '', { w: 240, hidden: true });
+const m1f = block(M1, 'panel2 fade', 1150, 170, '', 700);
+window.D2 = async () => {
+  go(M1, 0); await sleep(3200);
+  await M1.send('ca', 'am', { dur: 900, r: 13, label: 'content' }); M1.rename('am', null, H.old.am); M1.tone('am', 'good'); await sleep(500);
+  await M1.send('cb', 'bm', { dur: 900, r: 13, label: 'content' }); M1.rename('bm', null, H.old.bm); M1.tone('bm', 'good');
+};
+window.D3 = async () => {
+  M1.cap('A folder\'s fingerprint', 'The hash of its children\'s names and hashes');
+  await sleep(3200); M1.pop('fn'); M1.link('am', 'fn'); M1.link('bm', 'fn'); M1.link('fn', 'docs');
+  m1f.innerHTML = `docs = hash(<br>&nbsp;"a.md ${H.old.am}",<br>&nbsp;"b.md ${H.old.bm}"<br>)`; m1f.classList.add('in');
+  await sleep(700);
+  await M1.send('am', 'fn', { dur: 1000, r: 12, color: 'good', label: 'a.md ' + H.old.am }); await sleep(300);
+  await M1.send('bm', 'fn', { dur: 1000, r: 12, color: 'good', label: 'b.md ' + H.old.bm }); await sleep(300);
+  await M1.send('fn', 'docs', { dur: 800, r: 12, color: 'good' }); M1.rename('docs', null, H.old.docs); M1.tone('docs', 'good');
+};
+
+// ==================================================================== 1. the problem
+const PR = Stage('prompt', { caption: ['', ''] });
+block(PR, 'quote', 110, 80, 'Build a Merkle tree over a <b>real folder</b>, so two snapshots of a repo can be compared quickly. Implement three methods, and write your own tests.', 1700);
+const rows = [['build(path)', 'a folder on disk', 'a tree in memory'], ['get_hash(path, tree)', '"src/db.py" and a tree', 'that hash, a string'], ['diff(a, b)', 'two trees', 'a list of changes']]
+  .map(([c, i, o], n) => block(PR, 'iorow fade', 110, 410 + n * 190, `<code>${c}</code><span>${i}</span><span class="arr">→</span><b>${o}</b>`, 1700));
+window.P1 = () => go(PR, 1);
+window.P2 = () => rows[0].classList.add('in');
+window.P3 = () => rows[1].classList.add('in');
+window.P4 = () => rows[2].classList.add('in');
+
+const EX = Stage('example', { caption: ['', ''] });
+const listing = (title, lines) => `<h3>${title}</h3>` + lines.map(([t, k]) => `<div class="fl" data-k="${k || ''}">${t}</div>`).join('');
+const MON = [['src/'], ['  app.py'], ['  db.py'], ['  util/'], ['    io.py', 'mod'], ['docs/'], ['  a.md'], ['  b.md', 'rem'], ['lib/'], ['  x.py'], ['  y.py']];
+const TUE = [['src/'], ['  app.py'], ['  db.py'], ['  util/'], ['    io.py', 'mod'], ['docs/'], ['  a.md'], ['  c.md', 'add'], ['lib/'], ['  x.py'], ['  y.py']];
+block(EX, 'ex', 150, 70, listing('Monday', MON), 760); block(EX, 'ex', 1010, 70, listing('Tuesday', TUE), 760);
+const exAns = block(EX, 'ans fade', 150, 760, 'diff(monday, tuesday) ==<br>&nbsp;[("docs/b.md", <span class="r">"REMOVED"</span>), ("docs/c.md", <span class="a">"ADDED"</span>),<br>&nbsp;&nbsp;("src/util/io.py", <span class="m">"MODIFIED"</span>)]', 1620);
+window.E1 = () => go(EX, 1);
+window.E2 = async () => { for (const k of ['mod', 'rem', 'add']) { EX.svg.parentNode.querySelectorAll(`[data-k=${k}]`).forEach(e => e.classList.add(k)); await sleep(1500); } };
+window.E3 = () => exAns.classList.add('in');
+
+// ==================================================================== 2. background
+const GR = Stage('grid', { caption: ['The slow way', 'Compare every file, one by one'] });
+GR.text(490, 280, 'Your laptop', { size: 40 }); GR.text(1430, 280, 'Server index', { size: 40 });
+const cells = [[], []];
+[130, 1070].forEach((x0, s) => { for (let i = 0; i < 200; i++) cells[s].push(shape(GR.bg, 'rect', { x: x0 + (i % 20) * 36, y: 320 + Math.floor(i / 20) * 36, width: 30, height: 30, rx: 5, fill: '#dfe3ea' })); });
+block(GR, 'tally', 610, 760, 'Files compared: <b id="pcn">0</b>');
+window.B1 = async () => {
+  go(GR, 2);
+  for (let i = 0; i < 200; i++) {
+    const c = i === 137 ? '#cf222e' : '#9db7ea'; cells[0][i].setAttribute('fill', c); cells[1][i].setAttribute('fill', c);
+    document.getElementById('pcn').textContent = ((i + 1) * 500).toLocaleString();
+    await sleep(44);
+  }
+};
+window.B2 = () => {
+  GR.cap('Find what changed, without reading what didn\'t', 'That is the real constraint');
+  block(GR, 'tally', 610, 880, 'Files that changed: <b style="color:var(--bad)">1</b>');
+};
+
+const HM = Stage('hashf', { caption: ['A hash is a fingerprint', 'Any content in. A short fingerprint out'] });
+HM.node('in', 280, 380, 'doc', 'print(1)', 'any size', { w: 260 }); HM.node('fn', 860, 380, 'gear', 'SHA-256', '', { w: 240 }); HM.link('in', 'fn');
+const hO1 = HM.text(1230, 408, '', { size: 96, anchor: 'start', color: 'good' }); hO1.classList.add('mono');
+HM.node('in2', 280, 760, 'doc', 'print(2)', 'one character changed', { w: 340, hidden: true }); HM.node('fn2', 860, 760, 'gear', 'SHA-256', '', { w: 240, hidden: true });
+const hO2 = HM.text(1230, 788, '', { size: 96, anchor: 'start', color: 'bad' }); hO2.classList.add('mono');
+async function pour(a, b) { for (let i = 0; i < 4; i++) { HM.send(a, b, { dur: 650, r: 11 }); await sleep(260); } await sleep(600); }
+window.B3 = async () => { go(HM, 0); await sleep(1500); await pour('in', 'fn'); hO1.textContent = H.demo1; };
+window.B4 = async () => { HM.cap('Same content, same fingerprint', 'Every time, on any machine'); hO1.textContent = ''; await sleep(900); await pour('in', 'fn'); hO1.textContent = H.demo1; HM.tag('fn', 'same', 'good', -110); };
+window.B5 = async () => { HM.cap('One character changed', 'A completely different fingerprint'); HM.pop('in2'); HM.pop('fn2'); HM.link('in2', 'fn2'); await sleep(800); await pour('in2', 'fn2'); hO2.textContent = H.demo2; };
+
+const MK = Stage('merkle', { caption: ['A Merkle tree', 'Every level is hashed from the level below'] });
+drawTree(MK, { ox: 480, oy: 240, sy: 190, w: 124, hashes: H.old });
+TREE.forEach(([k]) => MK.tone(k, 'good'));
+const mkBig = block(MK, 'bigline fade', 110, 960, '', 1700);
+window.B6 = async () => {
+  go(MK, 0); await sleep(1500);
+  for (const [a, b] of [['io', 'util'], ['app', 'src'], ['db', 'src'], ['util', 'src'], ['am', 'docs'], ['bm', 'docs'], ['xx', 'lib'], ['yy', 'lib'], ['src', 'root'], ['docs', 'root'], ['lib', 'root']]) { MK.send(a, b, { dur: 650, color: 'good', r: 10 }); await sleep(420); }
+};
+window.B7 = async () => {
+  MK.cap('Change one file at the bottom', 'The change ripples up to the root');
+  await sleep(800); MK.tone('io', 'bad'); MK.rename('io', null, H.new.io);
+  for (const [a, b] of [['io', 'util'], ['util', 'src'], ['src', 'root']]) { await MK.send(a, b, { dur: 850, color: 'bad', r: 13 }); MK.tone(b, 'bad'); MK.rename(b, null, H.new[b]); await sleep(300); }
+};
+window.B8 = () => { MK.cap('The key insight', ''); mkBig.innerHTML = 'Same fingerprint on two folders means <span style="color:var(--good)">everything inside is the same</span>.'; mkBig.classList.add('in'); ['docs', 'am', 'bm', 'lib', 'xx', 'yy'].forEach(k => MK.badge(k, 'same', 'good')); };
+
+const QS = Stage('questions', { caption: ['Ask before you code', 'Each answer changes the code'] });
+const qr = [['What counts as a change?', 'Content and names. Not timestamps, or identical folders would look different.'],
+  ['Is a rename special?', 'Not at first. It shows up as one <b>REMOVED</b> and one <b>ADDED</b>.'],
+  ['Can files be huge?', 'Assume yes, so read them in pieces, never all at once.'],
+  ['Symbolic links?', 'Assume none. Say you\'d skip them, so a link can\'t trap you in a loop.']]
+  .map(([q, a], i) => block(QS, 'qrow fade', 110, 240 + i * 195, `<b>${q}</b><span>${a}</span>`, 1740));
+window.C1 = () => { go(QS, 2); setTimeout(() => qr[0].classList.add('in'), 500); };
+window.C2 = () => qr[1].classList.add('in');
+window.C3 = async () => { qr[2].classList.add('in'); await sleep(3400); qr[3].classList.add('in'); };
+
+// ==================================================================== 3. the plan
+const PL = Stage('plan', { caption: ['Two moves', ''] });
+const shapeTree = (pre, cx) => {
+  [['r', 0, 280], ['a', -220, 480], ['b', 220, 480], ['c', -340, 680], ['d', -110, 680], ['e', 110, 680], ['f', 340, 680]].forEach(([k, x, y]) => PL.node(pre + k, cx + x, y, null, '', '', { w: 110, h: 76 }));
+  [['r', 'a'], ['r', 'b'], ['a', 'c'], ['a', 'd'], ['b', 'e'], ['b', 'f']].forEach(([p, c]) => PL.link(pre + p, pre + c));
+};
+shapeTree('l', 480); shapeTree('t', 1440);
+const pl1 = block(PL, 'bigline fade', 130, 800, '1. <span style="color:var(--good)">Bottom up:</span> compute every hash, and store it on its node', 720);
+const pl2 = block(PL, 'bigline fade', 1090, 800, '2. <span style="color:#d97706">Top down:</span> compare, and go in only where hashes differ', 720);
+let plStop = () => {};
+window.L1 = () => {
+  go(PL, 3); pl1.classList.add('in');
+  const id = setInterval(async () => { const leaf = 'cdef'[Math.floor(Math.random() * 4)], mid = 'cd'.includes(leaf) ? 'a' : 'b'; PL.tone('l' + leaf, 'good'); await PL.send('l' + leaf, 'l' + mid, { dur: 500, color: 'good', r: 12 }); PL.tone('l' + mid, 'good'); await PL.send('l' + mid, 'lr', { dur: 500, color: 'good', r: 12 }); PL.tone('lr', 'good'); }, 700);
+  plStop = () => clearInterval(id);
+};
+window.L2 = async () => {
+  pl2.classList.add('in'); plStop();
+  await sleep(600); PL.tone('tr', 'warn'); await PL.send('tr', 'tb', { dur: 700, color: 'good', r: 12 }); PL.tone('tb', 'good'); PL.dim(['te', 'tf']); PL.tag('tb', 'same: skip', 'good');
+  await sleep(1100); await PL.send('tr', 'ta', { dur: 700, color: 'warn', r: 12 }); PL.tone('ta', 'warn');
+  await PL.send('ta', 'tc', { dur: 700, color: 'good', r: 12 }); PL.tone('tc', 'good');
+  await PL.send('ta', 'td', { dur: 700, color: 'bad', r: 12 }); PL.tone('td', 'bad'); PL.tag('td', 'found it', 'bad');
+};
+
+const ND = Split('nodes', { size: 29, lines: ['@dataclass', 'class Node:', '    hash: str', '    children: dict = None', '    # children: name -> Node', '    # None means this is a file'] });
+const ncF = block(ND.d, 'nc', 60, 130, `<h4>A folder: util</h4><div id="nh">hash: "${H.old.util}"</div><div id="nk">children: {"io.py": ─┐ }</div>`, 720);
+const ncL = block(ND.d, 'nc', 340, 470, `<h4>A file: io.py</h4><div>hash: "${H.old.io}"</div><div id="nn">children: None</div>`, 540);
+shape(ND.d.bg, 'path', { d: 'M640,300 C640,370 620,400 610,465', fill: 'none', stroke: '#2456c7', 'stroke-width': 5 });
+window.N1 = () => { go(ND, 3); ND.step(2, { from: document.getElementById('nh'), note: `Every node has a <b>hash</b>: a string.<br><code>@dataclass</code> writes the constructor for you, so <code>Node("${H.old.io}")</code> just works.` }); };
+window.N2 = () => ND.step(3, { from: document.getElementById('nk'), note: '<b>children</b> is a dict, because a child is found by name in one step, and a name can\'t appear twice.' });
+window.N3 = () => ND.step([3, 5], { from: document.getElementById('nn'), note: 'For a file, <b>children is None</b>. That\'s how the code tells a file from a folder.' });
+
+// ==================================================================== 4. build: hash_file
+const HF = Split('hfile', { size: 29, lines: ['def hash_file(path):', '    h = hashlib.sha256(b"F\\0")', '    with open(path, "rb") as f:', '        while chunk := f.read(65536):', '            h.update(chunk)', '    return h.hexdigest()'] });
+HF.d.node('file', 190, 200, 'doc', 'io.py', 'on disk', { w: 220 });
+HF.d.node('h', 640, 200, 'gear', 'h', 'the hasher', { w: 220, hidden: true });
+HF.d.link('file', 'h');
+const hfOut = HF.d.text(640, 370, '', { size: 80, color: 'good' }); hfOut.classList.add('mono');
+const fbar = block(HF.d, 'fbar', 90, 480, Array(6).fill('<i>64 KB</i>').join(''));
+const fcells = [...fbar.children];
+block(HF.d, 'panel2', 90, 620, '<h4>The file, as it\'s read</h4>Only one piece is in memory at a time, so size doesn\'t matter.', 760);
+window.F1 = () => { go(HF, 4); HF.d.pop('h'); setTimeout(() => HF.step(1, { from: 'h', note: 'A <b>hasher</b>: an object you feed bytes into. <code>b"F\\0"</code> is a tag, so a file can\'t be confused with a folder.' }), 500); };
+window.F2 = () => HF.step(2, { from: 'file', note: '<code>"rb"</code> means read raw bytes, since a file might not be text. <code>with</code> closes the file for you.' });
+window.F3 = () => { fcells[0].classList.add('read'); HF.step(3, { from: fcells[0], note: 'Read 64 KB. <code>:=</code> stores the chunk and tests it. An empty chunk means the end, and the loop stops.' }); };
+window.F4 = async () => {
+  HF.step(4, { from: 'h', note: '<code>h.update(chunk)</code> feeds this piece in. Each trip around the loop is one piece in the picture.' });
+  await sleep(1200); clearLinks();
+  for (let i = 0; i < 6; i++) { fcells.forEach((c, j) => { c.classList.toggle('read', j === i); c.classList.toggle('done', j < i); }); HF.hl(3); await sleep(420); HF.hl(4); HF.d.send('file', 'h', { dur: 500, r: 11, label: '64 KB', color: '#d97706' }); await sleep(800); }
+  fcells.forEach(c => { c.classList.remove('read'); c.classList.add('done'); });
+};
+window.F5 = () => { hfOut.textContent = H.old.io; HF.step(5, { from: hfOut, note: '<code>hexdigest()</code> returns the fingerprint as text. The picture shows only its first 4 characters.' }); };
+
+// ==================================================================== 4. build: the recursion
+const BD = Split('bcall', { size: 25, lines: ['def build(self, path):', '    if not os.path.isdir(path):', '        return Node(hash_file(path))', '    children = {}', '    for entry in os.scandir(path):',
+  '        children[entry.name] = self.build(entry.path)', '    h = hashlib.sha256(b"D\\0")', '    for name in sorted(children):', '        h.update(f"{name}\\0{children[name].hash}\\n".encode())', '    return Node(h.hexdigest(), children)'] });
+drawTree(BD.d, { oy: 100, sy: 112 });
+const stackP = block(BD.d, 'panel2', 20, 540, '<h4>Call stack</h4><div id="stk"></div>', 440); stackP.style.minHeight = '380px';
+const kidsP = block(BD.d, 'panel2', 480, 540, '<h4>children</h4><div id="kv">{ }</div>', 460); kidsP.style.minHeight = '380px';
+const PATH = { root: '.', src: 'src', docs: 'docs', lib: 'lib', util: 'src/util', io: 'src/util/io.py', app: 'src/app.py', db: 'src/db.py', am: 'docs/a.md', bm: 'docs/b.md', xx: 'lib/x.py', yy: 'lib/y.py' };
+const LABEL = Object.fromEntries(TREE.map(t => [t[0], t[3]]));
+const stk = () => document.getElementById('stk'), kv = html => { document.getElementById('kv').innerHTML = html; };
+function push(k) { const e = document.createElement('div'); e.className = 'frame'; e.textContent = `build("${PATH[k]}")`; stk().append(e); }
+function pop() { const s = stk(); if (s.lastChild) s.lastChild.remove(); }
+function setHash(k) { BD.d.rename(k, null, H.old[k]); BD.d.tone(k, 'good'); }
+window.G1 = () => { go(BD, 4); push('util'); BD.d.tone('util', 'hl'); BD.step(1, { from: 'util', note: 'Run it on <code>src/util</code>. Is it a folder? Yes, so <code>not isdir</code> is false, and we skip the return.' }); };
+window.G2 = () => BD.step([3, 4], { from: document.getElementById('kv'), note: 'An empty dict for the children. <code>os.scandir</code> lists what\'s in the folder, one entry at a time.' });
+window.G3 = () => { BD.d.tone('util', ''); BD.d.tone('io', 'hl'); push('io'); BD.step(5, { from: 'io', note: 'To fill in this child, <b>build calls itself</b>. That\'s recursion. The util call waits here until io.py comes back.' }); };
+window.G4 = () => { BD.step([1, 2], { from: 'io', note: 'In the new call the path is a file, so this branch runs: hash the file, and return a <code>Node</code> with no children.' }); };
+window.G5 = () => { setHash('io'); pop(); BD.d.tone('util', 'hl'); kv(`{<br>&nbsp;"io.py": Node("${H.old.io}")<br>}`); BD.step(5, { from: document.getElementById('kv'), note: 'Back in the util call. The returned node goes into the dict under its name.' }); };
+window.G6 = async () => {
+  BD.step([6, 7, 8], { from: 'util', note: 'A new hasher, tagged D. For each child, <b>in sorted order</b>, feed its name, a separator, and its hash. Sorted, because <code>scandir</code> can list in any order.' });
+  await sleep(3000); BD.d.send('io', 'util', { dur: 1100, color: 'good', label: H.old.io, r: 11 });
+};
+window.G7 = () => { setHash('util'); pop(); BD.step(9, { from: 'util', note: 'Return a node with the hash and the children. Util now has its fingerprint, in the picture and in the code.' }); };
+window.G8 = async () => {
+  clearLinks(); TREE.forEach(([k]) => { BD.d.rename(k, null, ' '); BD.d.tone(k, ''); }); stk().innerHTML = ''; kv('{ }');
+  BD.note('Each folder call <b>waits</b> for its children to return, so hashes appear from the bottom up. Nobody wrote "bottom up". Recursion gives it to us.');
+  const ms = 330;
+  async function run(k) {
+    push(k); BD.d.tone(k, 'hl'); BD.hl(1); await sleep(ms);
+    if (isFile(k)) { BD.hl(2); await sleep(ms); setHash(k); pop(); return; }
+    const got = [];
+    for (const c of [...KIDS[k]].sort((a, b) => LABEL[a] < LABEL[b] ? -1 : 1)) {
+      BD.hl(5); await sleep(ms * .6); BD.d.tone(k, ''); await run(c); BD.d.tone(k, 'hl'); got.push(c);
+      kv('{<br>' + got.map(g => `&nbsp;"${LABEL[g]}": Node("${H.old[g]}")`).join('<br>') + '<br>}');
+      BD.hl(5); await sleep(ms * .4);
+    }
+    BD.hl([7, 8]); got.forEach(c => BD.d.send(c, k, { dur: ms * 1.3, color: 'good', r: 9 })); await sleep(ms * 1.5);
+    BD.hl(9); await sleep(ms * .7); setHash(k); pop();
+  }
+  await run('root'); BD.d.tone('root', 'good hl'); BD.hl(9);
+};
+
+// ==================================================================== 5. get_hash
+const GH = Split('ghash', { size: 25, lines: ['def get_hash(self, path, tree):', '    node = tree', '    for part in [p for p in path.split("/") if p]:', '        if node.children is None or part not in node.children:', '            raise KeyError(path)', '        node = node.children[part]', '    return node.hash'] });
+drawTree(GH.d, { oy: 100, sy: 112, hashes: H.old });
+const partsP = block(GH.d, 'panel2', 60, 570, `<h4>get_hash("src/util/io.py", tree)</h4><span class="tilep" id="p0">src</span><span class="tilep" id="p1">util</span><span class="tilep" id="p2">io.py</span>`, 840);
+const nodeP = block(GH.d, 'panel2', 60, 790, '<h4>node is now</h4><div id="nowN" style="font-size:40px;font-weight:700">/</div>', 840);
+window.J1 = () => { go(GH, 5); GH.step(2, { from: partsP, note: 'Split the path into parts. The list comprehension drops empty pieces, so a leading slash is harmless.' }); };
+window.J2 = async () => {
+  GH.d.tone('root', 'hl'); GH.step(1, { from: 'root', note: 'Start at the root. For each part, step into that child. <b>One dict lookup is one arrow in the picture.</b>' });
+  await sleep(2600);
+  const path = ['root', 'src', 'util', 'io'];
+  for (let i = 0; i < 3; i++) {
+    const t = document.getElementById('p' + i); t.classList.add('now'); GH.step(5, { from: t });
+    await GH.d.send(path[i], path[i + 1], { dur: 800, r: 13, color: '#d97706' }); GH.d.tone(path[i], ''); GH.d.tone(path[i + 1], 'hl');
+    document.getElementById('nowN').textContent = LABEL[path[i + 1]];
+    t.classList.remove('now'); t.classList.add('done'); await sleep(350);
+  }
+};
+window.J3 = () => { GH.d.tone('io', 'good hl'); GH.d.badge('io', `return "${H.old.io}"`, 'good', 'bottom'); GH.step(6, { from: 'io', note: 'Out of parts, so <code>node</code> is the right one: return its stored hash. A missing part raises a clear error. Cost: one step per level, and no file is read.' }); };
+
+// ==================================================================== 6. diff
+const DF = Split('dcode', { size: 24, lines: ['def diff(self, a, b, path=""):', '    if a.hash == b.hash:', '        return []', '    if a.children is None and b.children is None:', '        return [(path, "MODIFIED")]', '    if a.children is None or b.children is None:',
+  '        return files(a, path, "REMOVED") + files(b, path, "ADDED")', '    old, new = a.children, b.children', '    changes = []', '    for name in sorted(old.keys() | new.keys()):', '        child = f"{path}/{name}" if path else name', '        if name not in old:',
+  '            changes += files(new[name], child, "ADDED")', '        elif name not in new:', '            changes += files(old[name], child, "REMOVED")', '        else:', '            changes += self.diff(old[name], new[name], child)', '    return changes'] });
+drawTree(DF.d, { oy: 95, sy: 98, h: 88, pre: 'a_', hashes: H.old });
+drawTree(DF.d, { oy: 515, sy: 98, h: 88, pre: 'b_', hashes: H.new, relabel: { bm: 'c.md' } });
+DF.d.text(20, 80, 'Monday', { size: 34, anchor: 'start', color: 'muted' }); DF.d.text(20, 500, 'Tuesday', { size: 34, anchor: 'start', color: 'muted' });
+const resP = block(DF.d, 'panel2', 20, 935, '<h4>changes</h4><div id="res">[ ]</div>', 925); resP.style.padding = '8px 18px'; resP.style.fontSize = '23px'; resP.style.lineHeight = '1.25';
+const RES = [];
+function addRes(path, kind, cls) { RES.push(`<span style="color:${cls}">("${path}", "${kind}")</span>`); document.getElementById('res').innerHTML = RES.join(' '); }
+async function cmp(k, same, tone) {
+  DF.d.tone('a_' + k, 'hl'); DF.d.tone('b_' + k, 'hl');
+  await DF.d.send('a_' + k, 'b_' + k, { dur: 650, r: 12, color: same ? 'good' : '#d97706' });
+  const t = tone || (same ? 'good' : 'warn'); DF.d.tone('a_' + k, t); DF.d.tone('b_' + k, t);
+}
+window.X1 = async () => { go(DF, 6); DF.step(1, { from: 'a_root', note: '<b>The first line does the most work.</b> Compare the two hashes. The roots differ, so something below changed.' }); await sleep(3500); await cmp('root', false); };
+window.X2 = () => DF.step([3, 5, 9], { from: 'b_root', note: 'Both are folders, so those checks are skipped. <code>old.keys() | new.keys()</code> is a set union: a name on either side gets visited: <b>docs, lib, src</b>.' });
+window.X3 = async () => { DF.step([15, 16], { from: 'a_docs', note: '<code>docs</code> is on both sides, so call diff on the pair. Same function, one level down.' }); await sleep(3800); DF.step(1, { from: 'a_docs' }); await cmp('docs', false); };
+window.X4 = async () => { DF.step([1, 2], { from: 'a_am', note: '<code>a.md</code> is on both sides, so diff runs again. Same hash: return nothing.' }); await sleep(2000); await cmp('am', true); };
+window.X5 = () => { DF.d.tone('a_bm', 'bad'); DF.step([13, 14], { from: 'a_bm', note: '<code>b.md</code> is in the old folder, not the new one. This branch: <b style="color:var(--bad)">REMOVED</b>.' }); addRes('docs/b.md', 'REMOVED', 'var(--bad)'); };
+window.X6 = () => { DF.d.tone('b_bm', 'good'); DF.step([11, 12], { from: 'b_bm', note: '<code>c.md</code> is in the new folder, not the old one. This branch: <b style="color:var(--good)">ADDED</b>.' }); addRes('docs/c.md', 'ADDED', 'var(--good)'); };
+window.X7 = async () => {
+  DF.step([1, 2], { from: 'a_lib', note: '<code>lib</code>: <b>same hash, return nothing.</b> The whole folder is skipped, and its files are never touched. This line is the point of a Merkle tree.' });
+  await sleep(3500); await cmp('lib', true);
+  ['a_', 'b_'].forEach(p => { DF.d.dim([p + 'xx', p + 'yy']); DF.d.linkTone(p + 'lib-' + p + 'xx', 'dim'); DF.d.linkTone(p + 'lib-' + p + 'yy', 'dim'); });
+};
+window.X8 = async () => {
+  clearLinks(); DF.hl(1); DF.note('<code>src</code> differs: go in. <code>app.py</code> and <code>db.py</code> match, and return nothing. <code>util</code> differs: go in.');
+  await cmp('src', false); await sleep(600); await cmp('app', true); await sleep(200); await cmp('db', true); await sleep(900); await cmp('util', false);
+};
+window.X9 = async () => { DF.step([3, 4], { from: 'a_io', note: 'Both are files, with different hashes. This branch: <b style="color:#8a4b00">MODIFIED</b>.' }); await sleep(1800); await cmp('io', false, 'warn'); addRes('src/util/io.py', 'MODIFIED', '#8a4b00'); };
+window.X10 = () => DF.step(17, { from: resP, note: '<b>Exactly the list we expected</b> for Monday and Tuesday. And <code>lib</code> was never opened.' });
+const SW = Split('dhelper', { size: 26, lines: ['if a.children is None or b.children is None:', '    return files(a, path, "REMOVED") + files(b, path, "ADDED")', '', 'def files(node, path, kind):', '    if node.children is None:', '        return [(path, kind)]', '    found = []', '    for name in sorted(node.children):', '        found += files(node.children[name], f"{path}/{name}", kind)', '    return found'] });
+SW.d.text(250, 150, 'Monday', { size: 38, color: 'muted' }); SW.d.text(690, 150, 'Tuesday', { size: 38, color: 'muted' });
+SW.d.node('p1', 250, 260, 'doc', 'p', 'a file', { w: 190, tone: 'bad' });
+SW.d.node('p2', 690, 260, 'box', 'p/', 'a folder', { w: 190, tone: 'good' }); SW.d.node('q', 690, 500, 'doc', 'q', 'a file', { w: 190, tone: 'good' }); SW.d.link('p2', 'q');
+block(SW.d, 'panel2', 60, 660, '<span style="color:var(--bad)">("p", "REMOVED")</span><br><span style="color:var(--good)">("p/q", "ADDED")</span>', 840);
+window.X11 = () => { go(SW, 6); SW.step([0, 1], { from: 'p1', note: 'One side is a file, the other a folder. Report the old as removed, and the new as added.' }); setTimeout(() => SW.step([3, 4, 5, 7, 8], { from: 'q', note: '<code>files</code> walks a whole subtree and lists every file in it. The same helper handles a brand new folder.' }), 7500); };
+
+const GZ = Bars('scale', { head: 'One changed file, big repo', max: 100000, charts: [{ title: 'Folders 5 deep, 10 entries each', bars: [
+  { label: 'Every file', value: 100000, text: '100,000', color: 'bad' }, { label: 'diff', value: 900, text: 'about 50', color: 'good' }] }] });
+window.G9 = () => { go(GZ, 6); GZ.grow(0, 900); };
+
+// ==================================================================== 7. tests
+const TS = Split('tests', { size: 25, lines: ['def tree(file_map):', '    with tempfile.TemporaryDirectory() as d:', '        for rel, text in file_map.items():', '            p = Path(d, rel)', '            p.parent.mkdir(parents=True, exist_ok=True)', '            p.write_text(text)', '        return MerkleTree().build(d)', '', 'assert m.diff(a, tree(same)) == []', 'assert m.diff(a, edited) == [("src/util/io.py", "MODIFIED")]', 'assert m.diff(mon, tue) == EXPECTED', 'assert m.diff(x, y) == [("x", "REMOVED"), ("y", "ADDED")]', 'assert m.diff(p, q) == [("p", "REMOVED"), ("p/q", "ADDED")]'] });
+TS.d.node('tmp', 300, 240, 'box', 'temp folder', 'real, on disk', { w: 280, hidden: true });
+TS.d.node('t', 700, 240, null, 'tree', ' ', { w: 170, h: 96, tone: 'good', hidden: true });
+TS.d.link('tmp', 't', { dash: true });
+block(TS.d, 'panel2', 60, 420, ['identical folders', 'a nested edit', 'Monday to Tuesday', 'a rename', 'a file became a folder'].map((t, i) => `<div class="fade" id="tc${i}" style="font-size:36px;margin:12px 0"><span style="color:var(--good)">✓</span> ${t}</div>`).join(''), 840);
+window.Q1 = async () => { go(TS, 7); TS.d.pop('tmp'); TS.step([1, 2, 3, 4, 5], { from: 'tmp', note: 'A real temporary folder. Python deletes it when the <code>with</code> block ends.' }); await sleep(4500); TS.d.pop('t'); TS.step(6, { from: 't' }); };
+window.Q2 = async () => { TS.note('One assert per case. <b>Run them after every method</b>, not at the end.'); clearLinks(); await sleep(1500); for (let i = 0; i < 5; i++) { TS.hl(8 + i); document.getElementById('tc' + i).classList.add('in'); await sleep(1000); } };
+
+const HR = Stage('hour', { caption: ['How it fits in the hour', 'The order you\'d type it'] });
+const seg = [['Clarify', 5, '#5f6368'], ['Node, hash_file', 5, '#2456c7'], ['build + test', 10, '#1a7f37'], ['get_hash + test', 5, '#1a7f37'], ['diff + test', 15, '#1a7f37'], ['Edge cases', 10, '#bf8700'], ['Follow-ups', 10, '#8250df']];
+const tl = block(HR, 'tlbar', 110, 340, seg.map(([n, m, c]) => `<div style="flex:${m};background:${c}">${n}<small>${m} min</small></div>`).join(''), 1700);
+const hrN = block(HR, 'bigline fade', 110, 640, 'Each method gets a test <span style="color:var(--good)">before</span> you start the next one, so a bug can only be in what you just wrote.', 1700);
+window.Q3 = async () => { go(HR, 7); for (const c of tl.children) { await sleep(1300); c.classList.add('in'); } await sleep(300); hrN.classList.add('in'); };
+
+// ==================================================================== 8. follow-ups
+const U1S = Stage('fu1', { caption: ['Follow-up: one file changes after build', 'Don\'t rebuild. Rehash one path'] });
+drawTree(U1S, { ox: 480, oy: 240, sy: 200, w: 124, hashes: H.old }); TREE.forEach(([k]) => U1S.tone(k, 'good'));
+window.U1 = async () => { go(U1S, 8); await sleep(2500); U1S.tone('io', 'bad'); U1S.rename('io', null, H.new.io); for (const [a, b] of [['io', 'util'], ['util', 'src'], ['src', 'root']]) { await U1S.send(a, b, { dur: 900, color: 'bad', r: 13 }); U1S.tone(b, 'bad'); U1S.rename(b, null, H.new[b]); await sleep(250); } };
+
+const U2S = Stage('fu2', { caption: ['Follow-up: two machines', 'Send hashes, not files'] });
+U2S.node('c', 330, 400, 'browser', 'Laptop', '', { w: 240 }); U2S.node('s', 1590, 400, 'server', 'Server', '', { w: 240 }); U2S.link('c', 's');
+const u2log = block(U2S, 'panel2', 460, 560, '', 1000);
+async function hop(a, b, label, line) { await U2S.send(a, b, { dur: 1100, r: 14, label }); u2log.innerHTML += `<div>${line}</div>`; await sleep(250); }
+window.U2 = async () => { go(U2S, 8); await sleep(900); await hop('c', 's', 'root hash', 'Root differs'); await hop('s', 'c', 'child hashes', 'src and docs differ, lib matches'); await hop('c', 's', 'src children', 'util differs'); await hop('s', 'c', 'util children', 'io.py differs: send just that file'); };
+
+const U3S = Stage('fu3', { caption: ['Follow-up: renames', 'A file\'s hash comes only from its content'] });
+U3S.node('r', 480, 480, 'doc', 'old_name.py', 'REMOVED  ' + H.demo1, { w: 400, tone: 'bad' }); U3S.node('a', 1440, 480, 'doc', 'new_name.py', 'ADDED  ' + H.demo1, { w: 400, tone: 'good' });
+window.U3 = async () => { go(U3S, 8); await sleep(2200); await U3S.send('r', 'a', { dur: 1400, r: 14, curve: 180, label: 'same hash', color: '#d97706' }); U3S.link('r', 'a', { dash: true, curve: 180, tone: 'acc' }); U3S.text(960, 760, 'So it moved. It\'s a rename.', { size: 60, color: 'acc' }); };
+
+// ==================================================================== 9. the full solution
+const FC = document.createElement('section'); FC.id = 'fullcode'; FC.className = 'scene'; document.body.append(FC);
+const makeCol = (lines, x) => { const b = document.createElement('div'); b.className = 'fullc'; b.style.left = x + 'px'; FC.append(b);
+  return { b, lines, L: lines.map(t => { const e = document.createElement('div'); e.className = 'ln'; e.innerHTML = py(t) || ' '; b.append(e); return e; }) }; };
+const COLS = [makeCol(FULL.left, 12), makeCol(FULL.right, 966)];
+function lit(starts) {
+  COLS.forEach(c => { c.L.forEach(l => l.classList.remove('lit')); c.b.classList.add('focus'); });
+  for (const st of starts) {
+    for (const c of COLS) {
+      const i = c.lines.findIndex(l => l.startsWith(st)); if (i < 0) continue;
+      const ind = st.length - st.trimStart().length;
+      c.L[i].classList.add('lit');
+      for (let j = i + 1; j < c.lines.length; j++) {
+        const t = c.lines[j]; if (t.trim() && t.length - t.trimStart().length <= ind) break;
+        if (t.trim()) c.L[j].classList.add('lit');
+      }
+    }
+  }
+}
+const showFull = () => { clearLinks(); show('fullcode'); CH.set(9); };
+window.S1 = () => { showFull(); COLS.forEach(c => c.b.classList.remove('focus')); };
+window.S2 = () => lit(['@dataclass', 'class Node', 'def hash_file']);
+window.S3 = () => lit(['    def build']);
+window.S4 = () => lit(['    def get_hash']);
+window.S5 = () => lit(['    def diff']);
+window.S6 = () => lit(['def files']);
+
+const CS = Stage('costs', { caption: ['What each method costs', ''] });
+const csr = [['build', 'Reads every byte of every file, once', 'all the bytes'], ['get_hash', 'One dictionary lookup per path part', 'the depth'], ['diff', 'Only walks the branches that changed', 'changed paths']]
+  .map(([a, b, c], i) => block(CS, 'cost fade', 110, 280 + i * 215, `<code>${a}</code><span>${b}</span><b>${c}</b>`, 1700));
+window.S7 = async () => { go(CS, 9); for (const r of csr) { await sleep(1600); r.classList.add('in'); } };
+
+const RC = Stage('recap', { caption: ['', ''] });
+const rr = [['Hashes rising up the tree', 'build\'s recursion returning'], ['Skipping a whole folder', 'if a.hash == b.hash: return []'], ['Only in the new tree', 'if name not in old: ... "ADDED"'], ['Only in the old tree', 'elif name not in new: ... "REMOVED"'], ['Two files that differ', 'return [(path, "MODIFIED")]']]
+  .map(([a, b], i) => block(RC, 'rrow fade', 110, 110 + i * 180, `<span>${a}</span><span class="arr">→</span><span><code>${esc(b)}</code></span>`, 1710));
+window.R1 = () => { go(RC, 9); setTimeout(() => rr[0].classList.add('in'), 300); };
+window.R2 = () => rr[1].classList.add('in');
+window.R3 = async () => { rr[2].classList.add('in'); await sleep(2600); rr[3].classList.add('in'); await sleep(2600); rr[4].classList.add('in'); };
+
+const Z = Say('say', 'Hash bottom up, compare top down, and skip every subtree whose hash matches.');
+document.querySelector('#say .kicker').textContent = 'The one line to remember';
+window.Z1 = () => go(Z, 9);
+</script>
+</body>
+</html>

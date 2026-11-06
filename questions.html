@@ -277,6 +277,8 @@
 <details class="answer"><summary><span class="show">See answer</span><span class="hide">Hide answer</span></summary><div class="answer-body"><p>Keep the invariants and the go-live basics. Cut the features. Keep: the conditional update, idempotency keys, hosted checkout, the CDN, a load test with a pass bar, a pause switch, and a code freeze. Cut: the waiting room (just a flag that shows a "come back later" page), custom dashboards (use the platform's defaults plus 3 alerts), the waitlist, and anything nice to have. Say it out loud: "I'm cutting features, not correctness."</p></div></details></section><section class="tabpanel" id="tab-coding" role="tabpanel" hidden><p><strong>TLDR.</strong> This is a pairing round: a backend problem, built in stages. Set a 45-minute timer. Read the prompt and Stage 1 only. Out loud, restate it, ask your questions, and propose method signatures. Then code Stage 1 with a few quick asserts, and only then open the next stage. The answer key is one good solution, written the way you'd write it in the interview: plain Python, standard library only.</p>
 <p><strong>Questions</strong></p>
 <ol><li><a href="#k-library">Library lending desk</a> (dict state, a queue per key)</li><li><a href="#k-parking">Parking garage</a> (allocation, money in cents)</li><li><a href="#k-leaderboard">Puzzle game leaderboard</a> (top k, rank, ties)</li><li><a href="#k-files">Code editor file system</a> (a tree of dicts)</li><li><a href="#k-config">Config store with history</a> (as-of reads with bisect)</li><li><a href="#k-rooms">Meeting room booking</a> (interval overlap)</li><li><a href="#k-flags">Feature flags</a> (stable percentage rollout)</li><li><a href="#k-evals">Nightly eval results</a> (regressions between runs)</li></ol>
+<p>With a video walkthrough. Try each one first, because the video shows a full solution. These prompts are rebuilt from public candidate reports, so the real wording may differ:</p>
+<ol><li><a href="#k-merkle">Repository Merkle tree</a> (hash bottom up, compare top down)</li><li><a href="#k-stream">Streaming text parser</a> (state across chunks)</li><li><a href="#k-limiter">Hierarchical rate limiter</a> (check every level, then commit)</li></ol>
 <p>The quick tests in every answer use this helper:</p>
 <pre><code>def raises(exc, fn, *args, **kwargs):
     try:
@@ -922,7 +924,381 @@ assert ev.compare(&quot;mon&quot;, &quot;tue&quot;) == {&quot;regressions&quot;:
 assert ev.flaky([&quot;mon&quot;, &quot;tue&quot;]) == [&quot;c1&quot;, &quot;c2&quot;]
 assert raises(UnknownRun, ev.summary, &quot;wed&quot;)</code></pre>
 <h3 id="5-follow-ups">5. Follow-ups</h3>
-<ul><li><strong>The dict absorbed Stage 2:</strong> keying results by case id means a retry overwrites, so "last result wins" and "never count twice" come for free. A list of results would have needed a rewrite.</li><li><strong>Complexity:</strong> <code>record</code> is O(1); <code>summary</code> and <code>compare</code> are O(cases); <code>flaky</code> is O(runs × cases).</li><li><strong>Is a drop real?</strong> On 2,000 cases, a few regressions can be noise. Report the regression and fix counts, and use a paired test on just the cases that changed (McNemar's test) before calling it worse.</li><li><strong>Parallel workers:</strong> a single dict write is safe in CPython, but <code>summary</code> can iterate while a worker inserts ("dictionary changed size"). Take a lock, or snapshot the dict first.</li><li><strong>How it evolves:</strong> a results table <code>(run_id, case_id, attempt, passed)</code> with a unique index, and the latest attempt per case picked in the query.</li></ul></div></details></section><script>(function(){
+<ul><li><strong>The dict absorbed Stage 2:</strong> keying results by case id means a retry overwrites, so "last result wins" and "never count twice" come for free. A list of results would have needed a rewrite.</li><li><strong>Complexity:</strong> <code>record</code> is O(1); <code>summary</code> and <code>compare</code> are O(cases); <code>flaky</code> is O(runs × cases).</li><li><strong>Is a drop real?</strong> On 2,000 cases, a few regressions can be noise. Report the regression and fix counts, and use a paired test on just the cases that changed (McNemar's test) before calling it worse.</li><li><strong>Parallel workers:</strong> a single dict write is safe in CPython, but <code>summary</code> can iterate while a worker inserts ("dictionary changed size"). Take a lock, or snapshot the dict first.</li><li><strong>How it evolves:</strong> a results table <code>(run_id, case_id, attempt, passed)</code> with a unique index, and the latest attempt per case picked in the query.</li></ul></div></details>
+<hr>
+<h2 id="k-merkle">9. Repository Merkle tree</h2>
+<blockquote>You're working on the part of a code editor that keeps a repository in sync with a server. A repo can hold hundreds of thousands of files, and comparing them one by one is too slow. Build a Merkle tree over a real folder on disk, so two snapshots of the folder can be compared quickly.</blockquote>
+<p>Implement this class:</p>
+<pre><code>class MerkleTree:
+    def build(self, path):
+        &quot;&quot;&quot;Read the folder at path. Return a tree of your own design.&quot;&quot;&quot;
+
+    def get_hash(self, path, tree):
+        &quot;&quot;&quot;Return the hash stored for a relative path, like &quot;src/db.py&quot;.&quot;&quot;&quot;
+
+    def diff(self, tree_a, tree_b):
+        &quot;&quot;&quot;Return the changes from tree_a to tree_b: a list of (path, status).&quot;&quot;&quot;</code></pre>
+<p><strong>Requirements</strong></p>
+<ul><li>A file's hash comes from its content. A folder's hash comes from what's directly inside it.</li><li><code>status</code> is <code>&quot;ADDED&quot;</code>, <code>&quot;REMOVED&quot;</code> or <code>&quot;MODIFIED&quot;</code>. Report files, not folders.</li><li><code>diff</code> must not look inside a folder whose hash didn't change.</li><li>Write your own tests, using real temporary folders.</li></ul>
+<p><strong>Example</strong></p>
+<pre><code>Monday            Tuesday
+src/app.py        src/app.py
+src/db.py         src/db.py
+src/util/io.py    src/util/io.py   (edited)
+docs/a.md         docs/a.md
+docs/b.md         docs/c.md        (b.md deleted, c.md is new)
+lib/x.py          lib/x.py
+lib/y.py          lib/y.py
+
+diff(monday, tuesday) ==
+  [(&quot;docs/b.md&quot;, &quot;REMOVED&quot;), (&quot;docs/c.md&quot;, &quot;ADDED&quot;), (&quot;src/util/io.py&quot;, &quot;MODIFIED&quot;)]</code></pre>
+<p><strong>Walkthrough</strong> (12:50)</p>
+<video class="cc-video" controls playsinline preload="none" poster="videos/w01.jpg"><source src="videos/w01.mp4" type="video/mp4"></video>
+<details class="answer"><summary><span class="show">See answer</span><span class="hide">Hide answer</span></summary><div class="answer-body"><h3 id="1-clarify">1. Clarify</h3>
+<p><strong>Questions, with the interviewer's answers</strong></p>
+<ul><li>What counts as a change? <em>Content and names. Not timestamps, or identical folders would look different.</em></li><li>Is a rename special? <em>Not at first. It's one removed file and one added file.</em></li><li>Can files be huge? <em>Assume yes, so read them in pieces.</em></li><li>Symbolic links? <em>Assume none. Say you'd skip them, so a link can't trap you in a loop.</em></li><li>A path that isn't in the tree? *Raise <code>KeyError</code>.*</li></ul>
+<h3 id="2-the-idea">2. The idea</h3>
+<p>Two moves. Hash bottom up: a folder's hash needs its children's hashes first, and recursion gives you that order. Compare top down: if two hashes match, everything below them matches, so skip the whole subtree.</p>
+<h3 id="3-code">3. Code</h3>
+<pre><code>import hashlib
+import os
+from dataclasses import dataclass
+
+
+@dataclass
+class Node:
+    hash: str
+    children: dict = None      # name -&gt; Node. None means a file
+
+
+def hash_file(path):
+    h = hashlib.sha256(b&quot;F\0&quot;)
+    with open(path, &quot;rb&quot;) as f:
+        while chunk := f.read(65536):
+            h.update(chunk)
+    return h.hexdigest()
+
+
+class MerkleTree:
+    def build(self, path):
+        if not os.path.isdir(path):
+            return Node(hash_file(path))
+        children = {}
+        for entry in os.scandir(path):
+            children[entry.name] = self.build(entry.path)
+        h = hashlib.sha256(b&quot;D\0&quot;)
+        for name in sorted(children):
+            h.update(f&quot;{name}\0{children[name].hash}\n&quot;.encode())
+        return Node(h.hexdigest(), children)
+
+    def get_hash(self, path, tree):
+        node = tree
+        for part in [p for p in path.split(&quot;/&quot;) if p]:
+            if node.children is None or part not in node.children:
+                raise KeyError(path)
+            node = node.children[part]
+        return node.hash
+
+    def diff(self, a, b, path=&quot;&quot;):
+        if a.hash == b.hash:
+            return []
+        if a.children is None and b.children is None:
+            return [(path, &quot;MODIFIED&quot;)]
+        if a.children is None or b.children is None:
+            return files(a, path, &quot;REMOVED&quot;) + files(b, path, &quot;ADDED&quot;)
+        old, new = a.children, b.children
+        changes = []
+        for name in sorted(old.keys() | new.keys()):
+            child = f&quot;{path}/{name}&quot; if path else name
+            if name not in old:
+                changes += files(new[name], child, &quot;ADDED&quot;)
+            elif name not in new:
+                changes += files(old[name], child, &quot;REMOVED&quot;)
+            else:
+                changes += self.diff(old[name], new[name], child)
+        return changes
+
+
+def files(node, path, kind):
+    if node.children is None:
+        return [(path, kind)]
+    found = []
+    for name in sorted(node.children):
+        found += files(node.children[name], f&quot;{path}/{name}&quot;, kind)
+    return found</code></pre>
+<h3 id="4-quick-tests">4. Quick tests</h3>
+<pre><code>import tempfile
+from pathlib import Path
+
+
+def tree(file_map, dirs=()):
+    with tempfile.TemporaryDirectory() as d:
+        for rel in dirs:
+            Path(d, rel).mkdir(parents=True, exist_ok=True)
+        for rel, text in file_map.items():
+            p = Path(d, rel)
+            p.parent.mkdir(parents=True, exist_ok=True)
+            p.write_text(text)
+        return MerkleTree().build(d)
+
+
+MONDAY = {&quot;src/app.py&quot;: &quot;print(1)&quot;, &quot;src/db.py&quot;: &quot;connect()&quot;, &quot;src/util/io.py&quot;: &quot;read()&quot;,
+          &quot;docs/a.md&quot;: &quot;# A&quot;, &quot;docs/b.md&quot;: &quot;# B&quot;, &quot;lib/x.py&quot;: &quot;x = 1&quot;, &quot;lib/y.py&quot;: &quot;y = 2&quot;}
+TUESDAY = {&quot;src/app.py&quot;: &quot;print(1)&quot;, &quot;src/db.py&quot;: &quot;connect()&quot;, &quot;src/util/io.py&quot;: &quot;read(path)&quot;,
+           &quot;docs/a.md&quot;: &quot;# A&quot;, &quot;docs/c.md&quot;: &quot;# C&quot;, &quot;lib/x.py&quot;: &quot;x = 1&quot;, &quot;lib/y.py&quot;: &quot;y = 2&quot;}
+
+m = MerkleTree()
+a, b = tree(MONDAY), tree(TUESDAY)
+assert m.diff(a, b) == [(&quot;docs/b.md&quot;, &quot;REMOVED&quot;), (&quot;docs/c.md&quot;, &quot;ADDED&quot;), (&quot;src/util/io.py&quot;, &quot;MODIFIED&quot;)]
+assert m.diff(a, tree(MONDAY)) == []                                  # identical folders, different paths
+assert m.get_hash(&quot;src/util/io.py&quot;, a) == a.children[&quot;src&quot;].children[&quot;util&quot;].children[&quot;io.py&quot;].hash
+assert raises(KeyError, m.get_hash, &quot;src/nope.py&quot;, a)
+assert raises(KeyError, m.get_hash, &quot;src/app.py/x&quot;, a)
+assert m.diff(tree({&quot;x&quot;: &quot;1&quot;}), tree({&quot;y&quot;: &quot;1&quot;})) == [(&quot;x&quot;, &quot;REMOVED&quot;), (&quot;y&quot;, &quot;ADDED&quot;)]         # a rename
+assert m.diff(tree({&quot;p&quot;: &quot;1&quot;}), tree({&quot;p/q&quot;: &quot;1&quot;})) == [(&quot;p&quot;, &quot;REMOVED&quot;), (&quot;p/q&quot;, &quot;ADDED&quot;)]     # file to folder
+assert tree({&quot;p&quot;: &quot;&quot;}).hash != tree({}, dirs=[&quot;p&quot;]).hash              # empty file, empty folder</code></pre>
+<h3 id="5-follow-ups">5. Follow-ups</h3>
+<ul><li><strong>Complexity:</strong> <code>build</code> reads every byte once. <code>get_hash</code> takes one step per level. <code>diff</code> only walks the branches that changed.</li><li><strong>One file changes after build:</strong> don't rebuild. Rehash that file, then only its parents, up to the root.</li><li><strong>Two machines:</strong> send the root hash first. If it differs, ask for the children's hashes, and go down only where they differ. It's the same diff, with a network call at each step.</li><li><strong>Renames:</strong> a file's hash comes only from its content, so a removed file and an added file with the same hash are a move.</li><li><strong>Millions of files:</strong> store the tree on disk, and use a file's size and modified time to skip rehashing files that can't have changed.</li></ul></div></details>
+<hr>
+<h2 id="k-stream">10. Streaming text parser</h2>
+<blockquote>A language model's reply reaches the editor in chunks, and the editor shows it as it arrives. A chunk can be cut anywhere, even in the middle of a delimiter. Build a parser that takes the chunks one at a time, and marks each part of the reply as plain text, inline code or a code block.</blockquote>
+<p>Here's one interface. Propose another if you prefer:</p>
+<pre><code>class StreamParser:
+    def feed(self, chunk):
+        &quot;&quot;&quot;Take the next chunk. Return the (kind, text) events ready to show.&quot;&quot;&quot;
+
+    def finish(self):
+        &quot;&quot;&quot;The stream ended. Return any events still waiting.&quot;&quot;&quot;</code></pre>
+<p><strong>Requirements</strong></p>
+<ul><li><code>kind</code> is <code>&quot;text&quot;</code>, <code>&quot;inline&quot;</code> or <code>&quot;fence&quot;</code>.</li><li>One backtick opens and closes inline code. Three backticks in a row open and close a code block, also called a fence.</li><li>The result can't depend on where the cuts land. Pieces may be sized differently, but every character must get the same kind.</li><li>Style it as soon as you can. Once you know you're in code, send it as code, even before the closing delimiter arrives.</li><li>Never take back what you've sent. A reader can be selecting text while the reply is still arriving.</li></ul>
+<p><strong>Example</strong></p>
+<pre><code>feed(&quot;Use `x` th&quot;)   -&gt; [(&quot;text&quot;, &quot;Use &quot;), (&quot;inline&quot;, &quot;x&quot;), (&quot;text&quot;, &quot; th&quot;)]
+feed(&quot;en `&quot;)         -&gt; [(&quot;text&quot;, &quot;en &quot;)]
+feed(&quot;``py\npr&quot;)     -&gt; [(&quot;fence&quot;, &quot;py\npr&quot;)]
+feed(&quot;int(1)\n`&quot;)    -&gt; [(&quot;fence&quot;, &quot;int(1)\n&quot;)]
+feed(&quot;``&quot;)           -&gt; []
+feed(&quot; done&quot;)        -&gt; [(&quot;text&quot;, &quot; done&quot;)]
+finish()             -&gt; []</code></pre>
+<p><strong>Walkthrough</strong> (12:32)</p>
+<video class="cc-video" controls playsinline preload="none" poster="videos/w02.jpg"><source src="videos/w02.mp4" type="video/mp4"></video>
+<details class="answer"><summary><span class="show">See answer</span><span class="hide">Hide answer</span></summary><div class="answer-body"><h3 id="1-clarify">1. Clarify</h3>
+<p><strong>Questions, with the interviewer's answers</strong></p>
+<ul><li>What if the stream ends inside code? <em>It stays code. It's already on screen.</em></li><li>Two backticks on their own? <em>Ordinary characters.</em></li><li>One backtick inside a code block? <em>Ordinary code. Only three in a row close it.</em></li><li>The language name after the opening fence, or a fence in the middle of a line? <em>Keep it simple first. They're follow-ups.</em></li></ul>
+<h3 id="2-the-idea">2. The idea</h3>
+<p>A state machine with three states: text, inline and fence. The catch is that one backtick can't be decided yet: it may open inline code, start a fence, or be an ordinary character. So hold it and keep a count, and decide when a different character arrives or the count hits three. Between chunks, the parser only has to remember the state and the held count.</p>
+<h3 id="3-code">3. Code</h3>
+<pre><code>TEXT, INLINE, FENCE = &quot;text&quot;, &quot;inline&quot;, &quot;fence&quot;
+TICK = &quot;`&quot;
+
+
+class StreamParser:
+    def __init__(self):
+        self.state = TEXT
+        self.ticks = 0    # backticks held, not yet decided
+        self.buf = []     # characters waiting to go out
+
+    def feed(self, chunk):
+        out = []
+        for ch in chunk:
+            if ch == TICK:
+                self._tick(out)
+            else:
+                self._settle(out)
+                self.buf.append(ch)
+        self._flush(out)
+        return out
+
+    def finish(self):
+        out = []
+        if self.ticks:
+            out.append((self.state, TICK * self.ticks))
+            self.ticks = 0
+        return out
+
+    def _tick(self, out):
+        if self.state == INLINE:
+            self._switch(TEXT, out)
+            return
+        self.ticks += 1
+        if self.ticks == 3:
+            self.ticks = 0
+            target = TEXT if self.state == FENCE else FENCE
+            self._switch(target, out)
+
+    def _settle(self, out):
+        if self.ticks == 1 and self.state == TEXT:
+            self.ticks = 0
+            self._switch(INLINE, out)
+        elif self.ticks:
+            self.buf.append(TICK * self.ticks)
+            self.ticks = 0
+
+    def _switch(self, state, out):
+        self._flush(out)
+        self.state = state
+
+    def _flush(self, out):
+        if self.buf:
+            out.append((self.state, &quot;&quot;.join(self.buf)))
+            self.buf = []</code></pre>
+<h3 id="4-quick-tests">4. Quick tests</h3>
+<pre><code>import random
+
+
+def merged(events):                  # cuts change the piece sizes, so glue neighbors of the same kind
+    res = []
+    for kind, text in events:
+        if res and res[-1][0] == kind:
+            res[-1] = (kind, res[-1][1] + text)
+        else:
+            res.append((kind, text))
+    return res
+
+
+def run(chunks):
+    p = StreamParser()
+    events = []
+    for c in chunks:
+        events += p.feed(c)
+    return merged(events + p.finish())
+
+
+def random_cuts(s):
+    cuts = sorted(random.sample(range(len(s) + 1), random.randint(0, min(len(s), 5))))
+    return [s[i:j] for i, j in zip([0] + cuts, cuts + [len(s)])]
+
+
+SAMPLE = &quot;Use `x` then ```py\nprint(1)\n``` done&quot;
+WANT = [(&quot;text&quot;, &quot;Use &quot;), (&quot;inline&quot;, &quot;x&quot;), (&quot;text&quot;, &quot; then &quot;), (&quot;fence&quot;, &quot;py\nprint(1)\n&quot;), (&quot;text&quot;, &quot; done&quot;)]
+assert run([&quot;Use `x` th&quot;, &quot;en `&quot;, &quot;``py\npr&quot;, &quot;int(1)\n`&quot;, &quot;``&quot;, &quot; done&quot;]) == WANT
+assert run(list(SAMPLE)) == WANT
+for s in [SAMPLE, &quot;a``b&quot;, &quot;`a&quot;, &quot;```a&quot;, &quot;a`&quot;, &quot;a``&quot;, &quot;```a``b```c&quot;, &quot;````&quot;, &quot;`a``b`&quot;, &quot;```a`b```&quot;, &quot;&quot;, &quot;``````&quot;, &quot;x```&quot;]:
+    for _ in range(300):
+        assert run(random_cuts(s)) == run([s]), s
+assert run([&quot;a``b&quot;]) == [(&quot;text&quot;, &quot;a``b&quot;)]
+assert run([&quot;```a`b```c&quot;]) == [(&quot;fence&quot;, &quot;a`b&quot;), (&quot;text&quot;, &quot;c&quot;)]
+assert run([&quot;a``&quot;]) == [(&quot;text&quot;, &quot;a``&quot;)]
+assert StreamParser().feed(&#x27;`print(&quot;hello wor&#x27;) == [(&quot;inline&quot;, &#x27;print(&quot;hello wor&#x27;)]    # styled before it closes</code></pre>
+<h3 id="5-follow-ups">5. Follow-ups</h3>
+<ul><li><strong>Complexity:</strong> one step per character. Between chunks, it holds at most two backticks.</li><li><strong>The language name:</strong> add a fourth state after the opening fence, which collects characters up to the newline.</li><li><strong>Fences only at the start of a line:</strong> remember whether the last character was a newline. Anywhere else, three backticks are ordinary characters.</li><li><strong>Other marks, like bold:</strong> the same trick. A star might be the first of two stars, so hold it until you can tell.</li><li><strong>On the screen:</strong> each event adds to the last block, or opens a new one. Old text is never touched, which is what keeps a selection working.</li></ul></div></details>
+<hr>
+<h2 id="k-limiter">11. Hierarchical rate limiter</h2>
+<blockquote>We send notifications to users, and too many of them annoy people. Every user belongs to one team, and every team belongs to one company. Before each send, decide whether it may go out.</blockquote>
+<p>Implement this class:</p>
+<pre><code>class NotificationLimiter:
+    def __init__(self, user_to_team, team_to_company):
+        &quot;&quot;&quot;Two dicts: a user id to a team id, and a team id to a company id.&quot;&quot;&quot;
+
+    def should_send_notifications(self, user_id, timestamp):
+        &quot;&quot;&quot;Return True if this notification may be sent, and False if not.&quot;&quot;&quot;</code></pre>
+<p><strong>Requirements</strong></p>
+<ul><li>In any sliding window of 600 seconds, allow at most 3 sends per user, 10 per team and 20 per company.</li><li>An earlier send at time <code>s</code> counts at time <code>t</code> only if <code>t - s &lt; 600</code>.</li><li>A send goes through only if every level has room. A refused send counts nowhere, at any level.</li><li>Timestamps are in seconds, and never go backward.</li></ul>
+<p><strong>Example 1: one user</strong></p>
+<pre><code>should_send_notifications(&quot;u1&quot;, 1)    -&gt; True
+should_send_notifications(&quot;u1&quot;, 2)    -&gt; True
+should_send_notifications(&quot;u1&quot;, 3)    -&gt; True
+should_send_notifications(&quot;u1&quot;, 4)    -&gt; False   (the user&#x27;s limit)
+should_send_notifications(&quot;u1&quot;, 601)  -&gt; True    (the send at time 1 has expired)
+should_send_notifications(&quot;u1&quot;, 602)  -&gt; True</code></pre>
+<p><strong>Example 2: five users on one team</strong></p>
+<pre><code>u1 to u5 at times 1 to 5    -&gt; True, five times
+u1 to u5 at times 6 to 10   -&gt; True, five times
+u1 at time 11               -&gt; False   (the team&#x27;s limit, though u1 has sent only 2)
+u2 at time 601              -&gt; True    (the send at time 1 has expired)</code></pre>
+<p><strong>Walkthrough</strong> (11:57)</p>
+<video class="cc-video" controls playsinline preload="none" poster="videos/w03.jpg"><source src="videos/w03.mp4" type="video/mp4"></video>
+<details class="answer"><summary><span class="show">See answer</span><span class="hide">Hide answer</span></summary><div class="answer-body"><h3 id="1-clarify">1. Clarify</h3>
+<p><strong>Questions, with the interviewer's answers</strong></p>
+<ul><li>Is something exactly 600 seconds old still inside? <em>No, it has expired.</em></li><li>Do many threads call this at once? <em>Assume yes.</em></li><li>An unknown user? <em>Assume it's an error.</em></li><li>Is this one server or many? <em>One for the code. We'll talk about many afterward.</em></li></ul>
+<h3 id="2-the-idea">2. The idea</h3>
+<p>Keep the time of every accepted send, in one deque per level, so old sends can fall off the left in one step. Then make two moves. Look: drop what's expired, and check every level for room, changing no counts. Commit: only if all three said yes, add the time to all three. Hold one lock around both moves.</p>
+<h3 id="3-code">3. Code</h3>
+<pre><code>import threading
+from collections import defaultdict, deque
+
+
+class NotificationLimiter:
+    LIMITS = {&quot;user&quot;: 3, &quot;team&quot;: 10, &quot;company&quot;: 20}
+    WINDOW = 600
+
+    def __init__(self, user_to_team, team_to_company):
+        self.user_to_team = user_to_team
+        self.team_to_company = team_to_company
+        self.sent = defaultdict(deque)    # (level, id) -&gt; times
+        self.lock = threading.Lock()
+
+    def should_send_notifications(self, user_id, timestamp):
+        team = self.user_to_team[user_id]
+        company = self.team_to_company[team]
+        keys = [(&quot;user&quot;, user_id),
+                (&quot;team&quot;, team),
+                (&quot;company&quot;, company)]
+        with self.lock:
+            for key in keys:
+                log = self.sent[key]
+                while log and timestamp - log[0] &gt;= self.WINDOW:
+                    log.popleft()
+                if len(log) &gt;= self.LIMITS[key[0]]:
+                    return False
+            for key in keys:
+                self.sent[key].append(timestamp)
+            return True</code></pre>
+<h3 id="4-quick-tests">4. Quick tests</h3>
+<pre><code>T, F = True, False
+L = NotificationLimiter({&quot;u1&quot;: &quot;t1&quot;}, {&quot;t1&quot;: &quot;c1&quot;})
+ask = L.should_send_notifications
+times = (1, 2, 3, 4, 601, 602)
+assert [ask(&quot;u1&quot;, t) for t in times] == [T, T, T, F, T, T]
+
+five = {f&quot;u{i}&quot;: &quot;t1&quot; for i in range(1, 6)}
+L = NotificationLimiter(five, {&quot;t1&quot;: &quot;c1&quot;})
+ask = L.should_send_notifications
+calls = [(f&quot;u{i}&quot;, i) for i in range(1, 6)] + [(f&quot;u{i}&quot;, i + 5) for i in range(1, 6)] + [(&quot;u1&quot;, 11), (&quot;u2&quot;, 601)]
+assert [ask(u, t) for u, t in calls] == [T] * 10 + [F, T]
+
+# a refused send leaves no trace
+L = NotificationLimiter({**five, &quot;z&quot;: &quot;t1&quot;}, {&quot;t1&quot;: &quot;c1&quot;})
+ask = L.should_send_notifications
+for i in range(1, 6):
+    ask(f&quot;u{i}&quot;, 0)
+    ask(f&quot;u{i}&quot;, 1)
+assert ask(&quot;z&quot;, 2) is False
+assert len(L.sent[(&quot;user&quot;, &quot;z&quot;)]) == 0
+
+# the company limit: two full teams, then a third team is refused
+org = {f&quot;a{i}&quot;: &quot;ta&quot; for i in range(4)} | {f&quot;b{i}&quot;: &quot;tb&quot; for i in range(4)} | {&quot;c0&quot;: &quot;tc&quot;}
+L = NotificationLimiter(org, {&quot;ta&quot;: &quot;c&quot;, &quot;tb&quot;: &quot;c&quot;, &quot;tc&quot;: &quot;c&quot;})
+ask = L.should_send_notifications
+for u in [f&quot;{t}{i}&quot; for t in &quot;ab&quot; for i in range(4)]:
+    for _ in range(3):
+        ask(u, 0)
+assert ask(&quot;c0&quot;, 1) is False
+
+# the exact boundary
+L = NotificationLimiter({&quot;u1&quot;: &quot;t1&quot;}, {&quot;t1&quot;: &quot;c1&quot;})
+ask = L.should_send_notifications
+for _ in range(3):
+    ask(&quot;u1&quot;, 0)
+assert ask(&quot;u1&quot;, 599) is False
+assert ask(&quot;u1&quot;, 600) is True
+
+# 50 threads: exactly 20 get through
+org = {f&quot;u{i}&quot;: f&quot;t{i}&quot; for i in range(50)}
+L = NotificationLimiter(org, {f&quot;t{i}&quot;: &quot;c&quot; for i in range(50)})
+res = []
+
+
+def worker(i):
+    for _ in range(3):
+        res.append(L.should_send_notifications(f&quot;u{i}&quot;, 0))
+
+
+threads = [threading.Thread(target=worker, args=(i,)) for i in range(50)]
+[t.start() for t in threads]
+[t.join() for t in threads]
+assert sum(res) == 20</code></pre>
+<h3 id="5-follow-ups">5. Follow-ups</h3>
+<ul><li><strong>Complexity:</strong> a few steps per call, on average, since each send is removed at most once. No log ever holds more than its limit: 3, 10 or 20.</li><li><strong>Why not a fixed window?</strong> One counter reset every 10 minutes allows a burst around the reset: 3 just before and 3 just after, with a limit of 3.</li><li><strong>Many servers:</strong> a lock only protects one program. Move the logs to a shared store like Redis, and run a Lua script that prunes, looks at all three, and adds to all or none. Redis runs it as one step.</li><li><strong>Redis split across machines:</strong> one script must reach all its keys on one machine, so put all of a company's keys together with a hash tag. A very busy company can then overload its machine.</li><li><strong>Retries:</strong> give each send a request id. If you've seen that id, return the first answer, and count nothing.</li><li><strong>Redis is down:</strong> allow the send or refuse it. It's a product choice, so say which one and why.</li><li><strong>Limits in the thousands:</strong> a log per level gets big, so switch to approximate counters.</li></ul></div></details></section><script>(function(){
 var bs=document.querySelectorAll('.tabs button');
 function open(name){bs.forEach(function(b){var on=b.dataset.tab===name;b.setAttribute('aria-selected',on);
 document.getElementById('tab-'+b.dataset.tab).hidden=!on;});}

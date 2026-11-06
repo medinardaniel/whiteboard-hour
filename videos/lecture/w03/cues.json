@@ -1,0 +1,409 @@
+{
+ "target": "index.html",
+ "viewport": [
+  1920,
+  1080
+ ],
+ "voice": "en-US-AndrewMultilingualNeural",
+ "rate": "+4%",
+ "pronounce": {
+  "popleft": "pop left",
+  "defaultdict": "default dict",
+  "deque": "deck",
+  "Redis": "Reddiss",
+  "Lua": "Loo-ah"
+ },
+ "load_ms": 1200,
+ "gap_ms": 400,
+ "tail_ms": 1500,
+ "cues": [
+  {
+   "say": "Hierarchical rate limiter. We'll build it from the ground up: what the words mean, what the problem asks, the idea in pictures, and then every line of code, tied back to its picture.",
+   "post_ms": 1000
+  },
+  {
+   "say": "First, the words. A notification is a message an app sends you: an email, a text, a push alert. Send too many, and people get annoyed. And a single bug can spam everyone.",
+   "post_ms": 500,
+   "do": "js:setTimeout(D1, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "A rate limiter is the code that says no. Before each send, it answers one question: yes, send this one, or no, too many have gone out already.",
+   "post_ms": 500,
+   "do": "js:setTimeout(D2, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "A limit always has two parts: how many, and over how long. For example, three notifications per ten minutes. The over how long part is called the window.",
+   "post_ms": 700,
+   "do": "js:setTimeout(D3, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "Hierarchical means there are levels, nested inside each other. A user belongs to a team, and a team belongs to a company. Each level has its own limit. All the users on a team share the team's limit, and all the teams in a company share the company's.",
+   "post_ms": 500,
+   "do": "js:setTimeout(D4, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "So a send goes through only if every level allows it. Here, the user has room, but the team is full. So the answer is no.",
+   "post_ms": 1000,
+   "do": "js:setTimeout(D5, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "Now the problem, the way candidates report it. You write one method. It takes a user and a timestamp, which is just the time as a number of seconds. It returns true if the notification may be sent, and false if not.",
+   "post_ms": 500,
+   "do": "js:setTimeout(P1, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "You're given two dictionaries: one from a user to their team, and one from a team to its company.",
+   "post_ms": 400,
+   "do": "js:setTimeout(P2, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "The limits are three per user, ten per team, and twenty per company, within any six hundred seconds. That's ten minutes.",
+   "post_ms": 400,
+   "do": "js:setTimeout(P3, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "And two details matter. A refused send counts nowhere, at any level. And timestamps never go backward.",
+   "post_ms": 1000,
+   "do": "js:setTimeout(P4, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "Let's make that concrete. One user sends at times one, two, and three. All allowed. That's the user's limit of three.",
+   "post_ms": 400,
+   "do": "js:setTimeout(E1, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "At time four, the answer is no. Three are already inside the last six hundred seconds.",
+   "post_ms": 400,
+   "do": "js:setTimeout(E2, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "At time six oh one, the send from time one is exactly six hundred seconds old. That counts as expired, so there's room again. The answer is yes, and yes again at six oh two.",
+   "post_ms": 700,
+   "do": "js:setTimeout(E3, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "A second example. Five users on one team each send twice, from time one to time ten. That's all ten of the team's sends. So at time eleven, user one is refused, even though that user has only sent two. The team is full.",
+   "post_ms": 400,
+   "do": "js:setTimeout(E4, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "At time six oh one, the send from time one has expired, so the team has room, and user two is allowed.",
+   "post_ms": 1000,
+   "do": "js:setTimeout(E5, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "Why is this harder than a counter? The obvious way to count is called a fixed window: keep one counter, and reset it to zero every ten minutes. With a limit of three, the fourth send is refused. Looks fine.",
+   "post_ms": 400,
+   "do": "js:setTimeout(B1, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "But look at the reset. Three sends just before it, and three just after. That's six in about a minute, with a limit of three in ten minutes.",
+   "post_ms": 800,
+   "do": "js:setTimeout(B2, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "The fix is a sliding window. Don't reset anything. At each send, look back exactly six hundred seconds from now, and count only what's inside. To do that, keep the time of every accepted send.",
+   "post_ms": 500,
+   "do": "js:setTimeout(B3, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "As time moves on, the window slides, and old sends fall out on the left. The time stamps are already in order, so the oldest is always first.",
+   "post_ms": 400,
+   "do": "js:setTimeout(B4, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "So we need a list that adds on the right, and removes from the left. In Python, that's a deque, short for double ended queue. Both of those moves take one step. A plain list has to shift every element when you remove the first one.",
+   "post_ms": 1000,
+   "do": "js:setTimeout(B5, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "Before coding, ask a few questions, because each answer changes the code. Does a refused send count? No, at no level.",
+   "post_ms": 400,
+   "do": "js:setTimeout(C1, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "Is something exactly six hundred seconds old still inside? No, it has expired.",
+   "post_ms": 400,
+   "do": "js:setTimeout(C2, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "Do many threads call this at once? Assume yes, which we'll come back to. And is an unknown user possible? Assume it's an error.",
+   "post_ms": 1000,
+   "do": "js:setTimeout(C3, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "Now the plan. The obvious loop goes level by level, checking and adding as it goes. Here's the bug. The user has room, so add one. The team is full, so refuse. But the user's count already went up.",
+   "post_ms": 500,
+   "do": "js:setTimeout(L1, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "Try again, and again. The user is now blocked, and not one notification was ever sent.",
+   "post_ms": 800,
+   "do": "js:setTimeout(L2, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "So split it into two moves. First, look: is there room at every level? Change nothing while you look.",
+   "post_ms": 400,
+   "do": "js:setTimeout(L3, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "Second, commit: only if all three said yes, add to all three together. It's all or nothing.",
+   "post_ms": 1000,
+   "do": "js:setTimeout(L4, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "Now the code, starting with the setup. On the left is the picture, and on the right is the code for it. The limits and the window are constants on the class.",
+   "post_ms": 500,
+   "do": "js:setTimeout(N1, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "The constructor stores the two dictionaries we're given. This is how we walk from a user, up to a team, up to a company.",
+   "post_ms": 500,
+   "do": "js:setTimeout(N2, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "Self dot sent holds one log per level. Its key is a pair: the level, and the id. So there's a log for user U one, one for team T one, and one for company C one. A defaultdict creates the empty deque the first time a key is used, so we never check whether it exists.",
+   "post_ms": 500,
+   "do": "js:setTimeout(N3, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "And there's a lock, which we'll get to.",
+   "post_ms": 800,
+   "do": "js:setTimeout(N4, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "Now the method, with the very first call: user one, at time one. These two lines walk up the hierarchy, with one dictionary lookup each.",
+   "post_ms": 400,
+   "do": "js:setTimeout(W1, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "Then we build the list of three keys. Each one names a log.",
+   "post_ms": 500,
+   "do": "js:setTimeout(W2, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "Now the first move, look. For each key, get its log. The while loop removes expired sends, and there are none yet. Then the check: is the log already at its limit? The limit comes from the first part of the key, here user, which is three. Zero isn't, so we go on.",
+   "post_ms": 400,
+   "do": "js:setTimeout(W3, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "Team: zero of ten. Company: zero of twenty. All three said yes.",
+   "post_ms": 400,
+   "do": "js:setTimeout(W4, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "So the second move, commit. This loop adds the time to all three logs, and we return true.",
+   "post_ms": 800,
+   "do": "js:setTimeout(W5, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "Times two and three go exactly the same way. Each log grows by one.",
+   "post_ms": 600,
+   "do": "js:setTimeout(W6, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "Now time four. The user's log has three entries, and three is at the limit. So we return false, right there. The commit loop never runs, so nothing changes anywhere. That's the bug fixed.",
+   "post_ms": 800,
+   "do": "js:setTimeout(W7, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "Now time six oh one, and the while loop finally does something. Log zero is the oldest send. Six oh one minus one is six hundred, which is at least the window. So it's expired, and pop left removes it.",
+   "post_ms": 500,
+   "do": "js:setTimeout(W8, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "Check the next oldest. Six oh one minus two is five ninety nine. That's still inside, so the loop stops. It only looks at the front, because the log is in time order.",
+   "post_ms": 500,
+   "do": "js:setTimeout(W9, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "Now the user's log has two, so there's room. The team and company logs get pruned the same way, all three say yes, and we commit. True.",
+   "post_ms": 800,
+   "do": "js:setTimeout(W10, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "Watch the second example run, with the team's log filling up. Every call adds to all three levels.",
+   "post_ms": 400,
+   "do": "js:setTimeout(W11, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "Now user one at time eleven. The user's own log has two, so it passes. The team's log has ten, so we return false. Look at the user's log: it's still two. The look never changes the count.",
+   "post_ms": 500,
+   "do": "js:setTimeout(W12, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "And user two at time six oh one. The oldest send falls out of the team's log, so there's room, and the answer is true.",
+   "post_ms": 1000,
+   "do": "js:setTimeout(W13, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "Now that lock. A thread is a separate line of work inside one program, and a server runs many at once. Say the company is at nineteen of twenty, with one slot left. Two threads look at the same moment, and both see room. Both add. Now it's twenty one. That's called a race condition.",
+   "post_ms": 500,
+   "do": "js:setTimeout(H1, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "The fix is a lock. Only one thread can hold it at a time, and any other thread waits. So thread A looks and commits, and only then can thread B look, and it sees the company is full.",
+   "post_ms": 500,
+   "do": "js:setTimeout(H2, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "In code, it's this with block. It takes the lock on the way in, and releases it on the way out, even when we return from the middle. Everything inside now happens as one step, which is called atomic. No other thread can see it half done.",
+   "post_ms": 1000,
+   "do": "js:setTimeout(H3, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "Now tests. Start with the reported examples, as asserts. Then one for a refused send leaving no trace, one for the company limit, and one for the exact boundary: five ninety nine is still inside, and six hundred has expired.",
+   "post_ms": 500,
+   "do": "js:setTimeout(Q1, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "And one for threads: fifty threads send at the same moment against a company limit of twenty, and exactly twenty get through.",
+   "post_ms": 800,
+   "do": "js:setTimeout(Q2, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "Here's how that fits in the hour, in the order you'd type it. Five minutes to clarify. Then one level with a sliding window. Then all three levels, look then commit, with the reported examples as tests. Then the lock. That leaves a good twenty minutes for the design follow-ups.",
+   "post_ms": 1100,
+   "do": "js:setTimeout(Q3, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "Those follow-ups usually start here: what about many servers? A lock only protects one program. Each server has its own logs, so each thinks it's at seven of twenty, and together they've sent twenty one.",
+   "post_ms": 500,
+   "do": "js:setTimeout(U1, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "So move the logs out to one shared store, like Redis, an in-memory database. Redis can run a small Lua script as one step, with nothing else running in between. So the script does what our method does: prune, look at all three, and add to all or none. It's the same look and commit, in a different place.",
+   "post_ms": 500,
+   "do": "js:setTimeout(U2, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "Next: Redis itself gets split across machines, and one script must reach all its keys on one machine. So put all of a company's keys together. A very busy company can then overload that machine, so be ready to talk about that.",
+   "post_ms": 500,
+   "do": "js:setTimeout(U3, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "What about retries? If a server retries the same send, it shouldn't count twice. So give each send a request id, and if you've seen that id, return the first answer.",
+   "post_ms": 400,
+   "do": "js:setTimeout(U4, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "And if Redis is down? Either allow the send, or refuse it, and that's a product choice. Say which one you'd pick and why. And if limits grow into the thousands, a log per level gets big, so switch to approximate counters.",
+   "post_ms": 1000,
+   "do": "js:setTimeout(U5, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "Here's the full solution, all on one screen. You've now seen every line of it. Pause here if you want to read it through.",
+   "post_ms": 2500,
+   "do": "js:setTimeout(S1, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "At a high level, it has four pieces. The constants are the limits and the window. The constructor stores the dictionaries, one log per level, and a lock.",
+   "post_ms": 500,
+   "do": "js:setTimeout(S2, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "The method first works out the three keys, by walking up from the user.",
+   "post_ms": 500,
+   "do": "js:setTimeout(S3, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "Then, under the lock, it looks at every level: drop what's expired from the front, and if a log is at its limit, return false.",
+   "post_ms": 500,
+   "do": "js:setTimeout(S4, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "And if all three had room, it commits: add the time to all three logs, and return true.",
+   "post_ms": 800,
+   "do": "js:setTimeout(S5, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "As for cost: each call removes at most what was added earlier, so it averages out to a few steps per call. And no log ever holds more than its limit: three, ten, or twenty.",
+   "post_ms": 1000,
+   "do": "js:setTimeout(S6, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "Let's tie the pictures to the code. The window sliding, and old sends falling out, is the while loop with pop left.",
+   "post_ms": 400,
+   "do": "js:setTimeout(R1, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "A level refusing is the return false in the first loop. And all levels going up together is the second loop.",
+   "post_ms": 400,
+   "do": "js:setTimeout(R2, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "Two threads taking turns is the with block.",
+   "post_ms": 1000,
+   "do": "js:setTimeout(R3, 0)",
+   "settle_ms": 350
+  },
+  {
+   "say": "The one line to remember: look at every level, then commit to every level, inside one atomic step.",
+   "post_ms": 1500,
+   "do": "js:setTimeout(Z1, 0)",
+   "settle_ms": 350
+  }
+ ]
+}

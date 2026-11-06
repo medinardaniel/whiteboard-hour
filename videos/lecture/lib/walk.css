@@ -1,0 +1,35 @@
+/* Extras for the coding walkthrough videos. See walk.js. */
+.s-code .code { position:absolute; left:70px; background:#fff; border:3px solid var(--line); border-radius:22px; padding:26px 0;
+  font-family: Consolas, "Cascadia Mono", Menlo, monospace; line-height:1.42; }
+.s-code .ln { padding:0 30px; white-space:pre; opacity:.12; transition: opacity .5s, background .25s; border-left:8px solid transparent; }
+.s-code .ln.on { opacity:1; }
+.s-code .ln.hl { background:#fff1cc; border-left-color:#d97706; }
+.s-code .ln.new { background:#e6f4ea; border-left-color:var(--good); }
+.s-code .ln.bad { background:#fdecee; border-left-color:var(--bad); }
+.s-split .code { border-radius:16px; }
+.sp-note { position:absolute; font-size:33px; line-height:1.34; color:var(--fg); }
+.sp-note code, .sp-note .mono { font: 700 30px Consolas, Menlo, monospace; color:#8a4b00; background:#fff1cc; padding:1px 8px; border-radius:7px; }
+.sp-note b { color:var(--acc); }
+.kw { color:#8250df; font-weight:700; } .st { color:#0a7b61; } .cm { color:#8a8f98; font-style:italic; }
+.mono { font-family: Consolas, "Cascadia Mono", Menlo, monospace; }
+.big-count { font-size:44px; font-weight:800; color:var(--muted); }
+.big-count b { color:var(--fg); font-size:64px; font-variant-numeric: tabular-nums; }
+.fade { opacity:0; transform: translateY(14px); transition: opacity .5s, transform .5s; }
+.fade.in { opacity:1; transform:none; }
+
+/* chapter bar */
+.chapbar { position:absolute; left:0; top:0; width:1920px; height:44px; display:flex; z-index:40; opacity:0; transition: opacity .5s; background:#fff; border-bottom:2px solid var(--line); }
+.chapbar.on { opacity:1; }
+.chapbar span { flex:1; text-align:center; font-size:23px; font-weight:700; line-height:42px; color:#9aa0a6; }
+.chapbar span.past { color:var(--muted); background:#f3f1ea; }
+.chapbar span.now { color:#fff; background:var(--acc); }
+
+/* three side-by-side mini examples */
+.vigs { position:absolute; left:70px; right:70px; top:230px; display:grid; grid-template-columns:repeat(3,1fr); gap:34px; }
+.vig { background:#fff; border:3px solid var(--line); border-radius:24px; padding:36px 34px 40px; min-height:640px; opacity:0; transform:translateY(24px); transition: all .55s; }
+.vig.in { opacity:1; transform:none; }
+.vig h3 { margin:0 0 30px; font-size:48px; }
+.vig .row { font: 34px Consolas, Menlo, monospace; padding:20px 22px; border-radius:14px; background:var(--land); margin:18px 0; }
+.vig .row b { color:var(--acc); }
+.vig .verdict { margin-top:30px; font-size:42px; font-weight:800; }
+.vig .verdict.good { color:var(--good); } .vig .verdict.bad { color:var(--bad); }

@@ -7,7 +7,7 @@ import sys
 from pathlib import Path
 
 text = (Path(__file__).parent / "src" / "coding.md").read_text(encoding="utf-8")
-blocks = lambda s: re.findall(r"```python\n(.*?)```", s, re.S)
+blocks = lambda s: re.findall(r"^```python\n(.*?)^```", s, re.S | re.M)
 head, *sections = re.split(r"\n## ", text)
 prelude = "\n".join(blocks(head))
 failed = 0

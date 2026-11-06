@@ -1,0 +1,490 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="color-scheme" content="light">
+<title>Streaming text parser: walkthrough</title>
+<link rel="stylesheet" href="../lib/lecture.css">
+<link rel="stylesheet" href="../lib/walk.css">
+<script src="../lib/icons.js"></script>
+<script src="../lib/lecture.js"></script>
+<script src="../lib/walk.js"></script>
+<script src="data.js"></script>
+<style>
+:root { --c-text:#5f6368; --c-inline:#2456c7; --c-fence:#8250df; }
+.quote { font-size:50px; line-height:1.36; font-weight:600; background:#fff; border-left:12px solid var(--acc); border-radius:14px; padding:30px 40px; }
+.iorow { display:grid; grid-template-columns:400px 560px 80px 620px; align-items:center; font-size:38px; background:#fff; border:3px solid var(--line); border-radius:18px; padding:18px 30px; }
+.iorow code { font: 700 36px Consolas, Menlo, monospace; color:var(--acc); }
+.iorow .arr { font-size:50px; color:var(--muted); font-weight:800; text-align:center; }
+.bigline { font-size:50px; font-weight:800; line-height:1.3; }
+.qrow { display:grid; grid-template-columns:680px 1000px; gap:24px; align-items:center; background:#fff; border:3px solid var(--line); border-radius:18px; padding:18px 30px; font-size:36px; line-height:1.3; }
+.qrow b { color:var(--acc); }
+.mdc { background:#fff; border:3px solid var(--line); border-radius:20px; padding:22px 34px; }
+.mdc h3 { font: 800 34px "Segoe UI"; margin:0 0 14px; color:var(--muted); }
+.raw { font: 700 44px/1.5 Consolas, Menlo, monospace; white-space:pre; }
+.raw span { padding:0 4px; border-radius:7px; transition: background .4s, color .4s; }
+.raw .bi.lit { background:#dbe6ff; color:var(--c-inline); }
+.raw .bf.lit { background:#eee2ff; color:var(--c-fence); }
+.rend { font-size:44px; line-height:1.5; }
+.rin { font: 700 42px Consolas, Menlo, monospace; padding:2px 16px; border-radius:9px; background:#eef0f3; transition: all .4s; }
+.rin.lit { background:var(--c-inline); color:#fff; }
+.rfence { font: 700 42px Consolas, Menlo, monospace; background:#eef0f3; border-radius:12px; padding:14px 22px; margin:10px 0; transition: all .4s; }
+.rfence small { display:block; font: 700 26px "Segoe UI"; color:var(--muted); }
+.rfence.lit { background:var(--c-fence); color:#fff; } .rfence.lit small { color:#e6dcff; }
+.tiles { display:flex; gap:2px; }
+.t { width:38px; height:60px; display:flex; align-items:center; justify-content:center; font: 700 32px Consolas, Menlo, monospace; border-radius:7px; background:#fff; border:2px solid #dfe3ea; box-sizing:border-box; transition: background .15s, color .15s, transform .15s; }
+.t.tick { color:#8a5a00; background:#ffe9a8; font-size:44px; border-color:#e8c766; }
+.belt { position:absolute; display:flex; gap:12px; }
+.chunk { display:flex; gap:2px; padding:6px; border-radius:12px; background:#e8eefb; border:3px solid #b9c9ee; transition: opacity .5s, transform .5s, background .3s; }
+.chunk.wait { opacity:0; transform: translateY(-40px); }
+.chunk.bad { background:#fdecee; border-color:var(--bad); }
+.pill { border:none; display:inline-block; padding:6px 14px; margin:4px 4px 4px 0; border-radius:10px; font: 700 34px Consolas, Menlo, monospace; white-space:pre; color:#fff; }
+.pill.text { background:#eef0f3; color:#30343a; } .pill.inline { background:var(--c-inline); } .pill.fence { background:var(--c-fence); }
+.screen { background:#fff; border:3px solid var(--line); border-radius:18px; padding:14px 22px; min-height:84px; }
+.screen i { font: 800 28px "Segoe UI"; color:var(--muted); font-style:normal; display:block; margin-bottom:6px; }
+.evrow { display:grid; grid-template-columns:340px 70px 1290px; align-items:center; background:#fff; border:3px solid var(--line); border-radius:14px; padding:8px 24px; font: 700 30px Consolas, Menlo, monospace; min-height:64px; }
+.evrow .arr { color:var(--muted); font-size:40px; text-align:center; }
+.evrow .r { opacity:0; transition: opacity .4s; } .evrow .r.in { opacity:1; }
+.ev { display:inline-block; padding:2px 10px; margin:2px 6px 2px 0; border-radius:8px; white-space:pre; }
+.ev.text { background:#eef0f3; color:#30343a; } .ev.inline { background:#dbe6ff; color:var(--c-inline); } .ev.fence { background:#eee2ff; color:var(--c-fence); }
+.sel { background:#b4d5fe; }
+.way { background:#fff; border:3px solid var(--line); border-radius:20px; padding:24px 30px; height:560px; box-sizing:border-box; }
+.way h3 { font-size:42px; margin:0 0 18px; }
+.way .scr { height:300px; border:3px solid var(--line); border-radius:12px; padding:14px; font: 700 28px/1.4 Consolas, Menlo, monospace; overflow:hidden; background:#fafaf7; transition: opacity .1s; }
+.way .v { margin-top:20px; font-size:36px; font-weight:800; color:var(--bad); }
+.tileRow { position:absolute; transform: scale(1.7); transform-origin: left top; }
+.bigv { position:absolute; font-size:44px; font-weight:800; }
+.q { position:absolute; font: 800 90px "Segoe UI"; color:var(--warn); }
+.st-box { position:absolute; width:300px; height:130px; display:flex; align-items:center; justify-content:center; border-radius:24px; font-size:46px; font-weight:800; background:#fff; border:4px solid #c9ced6; color:#7a808a; transition: all .25s; }
+.st-box.on { color:#fff; transform: scale(1.06); box-shadow:0 10px 26px rgba(0,0,0,.18); }
+.st-box.text.on { background:var(--c-text); border-color:var(--c-text); }
+.st-box.inline.on { background:var(--c-inline); border-color:var(--c-inline); }
+.st-box.fence.on { background:var(--c-fence); border-color:var(--c-fence); }
+.slot { width:62px; height:78px; border:4px dashed #d9c17a; border-radius:12px; display:flex; align-items:center; justify-content:center; font: 800 48px Consolas, Menlo, monospace; color:var(--warn); background:#fff; transition: all .15s; box-sizing:border-box; }
+.slot.full { background:#fff5d6; border-style:solid; border-color:var(--warn); transform: scale(1.06); }
+.slots { display:flex; gap:12px; }
+.lightbox { background:#30343a; border-radius:30px; padding:26px; display:flex; flex-direction:column; gap:22px; width:150px; }
+.lightbox i { display:block; width:150px; height:150px; border-radius:50%; background:#555a62; transition: background .2s, box-shadow .2s; }
+.lightbox i.r.on { background:#e5484d; box-shadow:0 0 40px #e5484d; } .lightbox i.a.on { background:#f5b301; box-shadow:0 0 40px #f5b301; } .lightbox i.g.on { background:#30a46c; box-shadow:0 0 40px #30a46c; }
+.bigstate { font: 700 64px Consolas, Menlo, monospace; }
+/* the machine: the parser's memory, painted from the real trace */
+.mach { height:980px; }
+.mach > div { position:absolute; }
+.ml { font: 700 27px Consolas, Menlo, monospace; color:var(--muted); }
+.ml small { font: 600 25px "Segoe UI"; margin-left:8px; }
+.m-t { gap:3px; }
+.m-t .t { width:62px; height:68px; font-size:38px; }
+.m-t .t.tick { font-size:50px; }
+.m-t .t.cur { transform: translateY(-8px); outline:5px solid #d97706; }
+.m-t .t.done { background:#eef0f3; color:#a4a9b1; border-color:#eef0f3; }
+.m-s { display:flex; gap:20px; }
+.m-s .sb { width:280px; height:78px; display:flex; align-items:center; justify-content:center; border-radius:16px; font-size:38px; font-weight:800; background:#fff; border:4px solid #c9ced6; color:#7a808a; transition: all .2s; }
+.m-s .sb.on { color:#fff; }
+.m-s .sb.text.on { background:var(--c-text); border-color:var(--c-text); } .m-s .sb.inline.on { background:var(--c-inline); border-color:var(--c-inline); } .m-s .sb.fence.on { background:var(--c-fence); border-color:var(--c-fence); }
+.m-h .slot { width:58px; height:68px; font-size:44px; }
+.m-b { display:flex; gap:3px; min-height:68px; min-width:60px; padding:0 8px; background:#fff; border:3px solid var(--line); border-radius:12px; align-items:center; box-sizing:border-box; }
+.m-b .t { width:42px; height:54px; font-size:30px; } .m-b .t.tick { font-size:38px; }
+.m-o { width:900px; min-height:100px; box-sizing:border-box; background:#fff; border:3px solid var(--line); border-radius:12px; padding:8px 14px; font: 700 27px/1.5 Consolas, Menlo, monospace; }
+.m-sc { width:900px; min-height:190px; box-sizing:border-box; background:#fff; border:3px solid var(--acc); border-radius:12px; padding:10px 14px; }
+.m-sc .pill { font-size:30px; padding:4px 10px; }
+.mach.vars .m-t, .mach.vars .m-o, .mach.vars .m-sc, .mach.vars .fadeL { opacity:.22; }
+/* tests */
+.mini { position:absolute; display:flex; gap:8px; flex-wrap:nowrap; }
+.mini .chunk { padding:3px; }
+.mini .t { width:21px; height:36px; font-size:19px; border-width:1px; } .mini .t.tick { font-size:24px; }
+.nasty { display:flex; flex-wrap:wrap; gap:10px; font: 700 30px Consolas, Menlo, monospace; }
+.nasty span { padding:6px 14px; background:#fff5d6; border:2px solid #e8c766; border-radius:10px; opacity:0; transition: opacity .3s; white-space:pre; }
+.nasty span.in { opacity:1; }
+.panel2 { background:#fff; border:3px solid var(--line); border-radius:16px; padding:14px 20px; font: 28px/1.4 Consolas, Menlo, monospace; }
+.panel2 h4 { font: 800 28px "Segoe UI"; margin:0 0 8px; color:var(--muted); }
+.tlbar { display:flex; gap:6px; }
+.tlbar div { opacity:0; transition: opacity .4s; height:190px; border-radius:14px; color:#fff; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; font-size:27px; font-weight:800; padding:4px; line-height:1.2; }
+.tlbar div.in { opacity:1; } .tlbar small { font-size:25px; font-weight:600; margin-top:6px; }
+.fucard { background:#fff; border:3px solid var(--line); border-radius:20px; padding:20px 30px; height:400px; box-sizing:border-box; }
+.fucard h3 { font-size:40px; margin:0 0 14px; }
+.fucard .why { font-size:31px; line-height:1.3; margin-top:16px; }
+.frow { display:flex; align-items:center; gap:14px; margin:10px 0; font-size:32px; font-weight:700; }
+.chp { padding:10px 18px; border-radius:12px; color:#fff; font-size:30px; font-weight:800; background:var(--c-text); }
+.chp.in2 { background:#bf8700; } .chp.fen { background:var(--c-fence); }
+.rrow { display:grid; grid-template-columns:790px 80px 840px; align-items:center; background:#fff; border:3px solid var(--line); border-radius:18px; padding:24px 30px; font-size:38px; font-weight:700; }
+.rrow code { font: 700 32px Consolas, Menlo, monospace; color:#8a4b00; background:#fff1cc; padding:6px 12px; border-radius:8px; }
+.rrow .arr { font-size:50px; color:#d97706; text-align:center; font-weight:800; }
+.fullc { position:absolute; top:54px; background:#fff; border:3px solid var(--line); border-radius:14px; padding:10px 0; font: 23px/1.32 Consolas, Menlo, monospace; width:940px; }
+.fullc .ln { padding:0 14px; white-space:pre; border-left:7px solid transparent; transition: background .3s, opacity .3s; }
+.fullc .ln.lit { background:#fff1cc; border-left-color:#d97706; }
+.fullc.focus .ln:not(.lit) { opacity:.38; }
+.cost { display:grid; grid-template-columns:600px 1040px; align-items:center; background:#fff; border:3px solid var(--line); border-radius:18px; padding:30px 30px; font-size:40px; }
+.cost b { color:var(--good); }
+</style>
+</head>
+<body>
+<script>
+const CH = Chapters(['What is it?', 'Problem', 'Why', 'Plan', 'State', 'feed', 'Backticks', 'Tests', 'Follow-ups', 'Full code']);
+const go = (o, c) => { clearLinks(); o.show(); CH.set(c); };
+const TK_ = '`';
+const vis = c => c === '\n' ? '↵' : c === ' ' ? '&nbsp;' : esc(c);
+const visS = s => esc(s).replace(/\n/g, '↵');
+const tilesHtml = s => [...s].map(c => `<span class="t ${c === TK_ ? 'tick' : ''}">${vis(c)}</span>`).join('');
+const pills = list => list.map(([k, t]) => `<span class="pill ${k}">${visS(t)}</span>`).join('');
+const evs = list => list.length ? list.map(([k, t]) => `<span class="ev ${k}">("${k}", "${visS(t)}")</span>`).join('') : '[ ]';
+const idx = (c, i) => TR.findIndex(s => s.n === c && s.i === i);
+
+Title({ num: 2, name: 'Streaming text parser', sub: 'From the problem, to the picture, to every line of code', phase: '' });
+const TF = titleFigure('Coding walkthrough 2 of 3', 960);
+TF.node('p', 380, 540, 'gear', 'Parser', '', { w: 190 });
+['a', 'b', 'c'].forEach((k, i) => TF.node(k, 90, 280 + i * 260, 'doc', 'chunk', '', { w: 130 }));
+[['t', 680, 280], ['i', 680, 540], ['f', 680, 800]].forEach(([k, x, y]) => TF.node(k, x, y, null, { t: 'text', i: 'inline', f: 'fence' }[k], '', { w: 130, h: 76 }));
+const tfLoop = setInterval(async () => {
+  const a = ['a', 'b', 'c'][Math.floor(Math.random() * 3)], o = [['t', 'muted'], ['i', 'acc'], ['f', '#8250df']][Math.floor(Math.random() * 3)];
+  await TF.send(a, 'p', { dur: 520, r: 12, color: 'warn' }); await TF.send('p', o[0], { dur: 520, r: 12, color: o[1] });
+}, 620);
+
+// ==================================================================== 0. the words
+const MD = Stage('md', { caption: ['Markdown', 'Plain text, with small marks for styling'] });
+block(MD, 'mdc', 110, 250, '<h3>What the model sends</h3><div class="raw">Use <span class="bi">`</span>x<span class="bi">`</span> then <span class="bf">```</span>py\nprint(1)\n<span class="bf">```</span> done</div>', 820);
+block(MD, 'mdc', 990, 250, '<h3>What the reader should see</h3><div class="rend">Use <span class="rin">x</span> then<div class="rfence"><small>py</small>print(1)</div>done</div>', 820);
+const mdQ = s => MD.svg.parentNode.querySelectorAll(s);
+const row1 = block(MD, 'bigline fade', 110, 690, '<span class="t tick" style="display:inline-flex;width:70px;height:90px;font-size:70px;vertical-align:middle">`</span> &nbsp;One on each side: <span style="color:var(--c-inline)">inline code</span>', 1700);
+const row2 = block(MD, 'bigline fade', 110, 840, '<span class="t tick" style="display:inline-flex;width:70px;height:90px;font-size:70px;vertical-align:middle">`</span><span class="t tick" style="display:inline-flex;width:70px;height:90px;font-size:70px;vertical-align:middle">`</span><span class="t tick" style="display:inline-flex;width:70px;height:90px;font-size:70px;vertical-align:middle">`</span> &nbsp;Three in a row: a <span style="color:var(--c-fence)">code block</span>, or <span style="color:var(--c-fence)">code fence</span>', 1700);
+window.D1 = () => { clearInterval(tfLoop); go(MD, 0); };
+window.D2 = async () => { MD.cap('The backtick', ''); row1.classList.add('in'); await sleep(2800); mdQ('.bi').forEach(e => e.classList.add('lit')); mdQ('.rin').forEach(e => e.classList.add('lit')); };
+window.D3 = async () => { row2.classList.add('in'); await sleep(900); mdQ('.bf').forEach(e => e.classList.add('lit')); mdQ('.rfence').forEach(e => e.classList.add('lit')); };
+
+const PA = Stage('pars', { caption: ['A parser', 'Reads raw text, and works out what each part means'] });
+PA.node('raw', 300, 560, 'doc', 'raw text', '', { w: 260 }); PA.node('p', 860, 560, 'gear', 'Parser', '', { w: 240 }); PA.link('raw', 'p');
+const paO = [['text', 'Use '], ['inline', 'x'], ['fence', 'print(1)']].map(([k, t], i) => block(PA, 'bigline fade', 1200, 330 + i * 170, `<span class="pill ${k}" style="font-size:42px">${t}</span> <span style="font-size:36px;color:var(--muted)">${k === 'text' ? 'plain text' : k === 'inline' ? 'inline code' : 'code fence'}</span>`, 680));
+window.D4 = async () => { go(PA, 0); await sleep(1500); for (const e of paO) { await PA.send('raw', 'p', { dur: 800, r: 13 }); await sleep(100); e.classList.add('in'); await sleep(500); } };
+
+const AR = Stage('arrive', { caption: ['Streaming', 'The reply arrives in small pieces, called chunks'] });
+const beltA = block(AR, 'belt', 110, 300, CHUNKS.map(c => `<div class="chunk wait">${tilesHtml(c)}</div>`).join(''));
+const arLab = block(AR, 'bigline fade', 480, 440, '<span style="color:var(--bad)">↑ a cut through the middle of three backticks</span>', 1300);
+const arScr = block(AR, 'screen fade', 110, 620, '<i>On screen</i><div id="arS"></div>', 1700);
+window.D5 = async () => { go(AR, 0); await sleep(2500); for (const c of beltA.children) { c.classList.remove('wait'); await sleep(900); } };
+window.D6 = async () => { AR.cap('The cuts land anywhere', 'You don\'t choose them'); await sleep(1600); [1, 2].forEach(i => beltA.children[i].classList.add('bad')); arLab.classList.add('in'); };
+window.D7 = async () => {
+  AR.cap('A streaming parser', 'Handles each chunk as it arrives');
+  [1, 2].forEach(i => beltA.children[i].classList.remove('bad')); arLab.classList.remove('in'); arScr.classList.add('in'); await sleep(1500);
+  const sh = []; for (let i = 0; i < CHUNKS.length; i++) { [...beltA.children].forEach((c, j) => c.style.opacity = j === i ? 1 : j < i ? .4 : 1); sh.push(...EVENTS[i]); document.getElementById('arS').innerHTML = pills(sh.reduce((m, [k, t]) => { if (m.length && m[m.length - 1][0] === k) m[m.length - 1] = [k, m[m.length - 1][1] + t]; else m.push([k, t]); return m; }, [])); await sleep(1050); }
+  [...beltA.children].forEach(c => c.style.opacity = 1);
+};
+
+// ==================================================================== 1. the problem
+const PR = Stage('prompt', { caption: ['', ''] });
+block(PR, 'quote', 110, 80, 'Text from a model arrives in <b>chunks</b>. As each chunk arrives, work out what can be shown, and how it\'s styled.', 1700);
+const rows = [['feed(chunk)', 'one chunk of text', 'a list of events'], ['finish()', 'nothing: the stream ended', 'anything still waiting']]
+  .map(([c, i, o], n) => block(PR, 'iorow fade', 110, 390 + n * 180, `<code>${c}</code><span>${i}</span><span class="arr">→</span><b>${o}</b>`, 1700));
+const evRow = block(PR, 'bigline fade', 110, 790, 'An event is a pair: <span class="ev text">("text", "Use ")</span> <span class="ev inline">("inline", "x")</span> <span class="ev fence">("fence", "print(1)")</span>', 1700);
+window.P1 = () => go(PR, 1);
+window.P2 = async () => { rows[0].classList.add('in'); await sleep(2600); evRow.classList.add('in'); };
+window.P3 = () => rows[1].classList.add('in');
+
+const EX = Stage('example', { caption: ['', ''] });
+const evR = CHUNKS.map((c, i) => block(EX, 'evrow fade', 110, 70 + i * 94, `<span>feed("${visS(c).replace(/&nbsp;/g, ' ')}")</span><span class="arr">→</span><span class="r">${evs(EVENTS[i])}</span>`, 1700));
+evR.forEach(r => { r.style.gridTemplateColumns = '440px 70px 1190px'; });
+const exS = block(EX, 'screen fade', 110, 660, '<i>On screen</i>' + pills(FINAL), 1700);
+window.E1 = async () => { go(EX, 1); for (const r of evR) { await sleep(450); r.classList.add('in'); } };
+window.E2 = async () => { await sleep(1500); for (const r of evR) { r.querySelector('.r').classList.add('in'); await sleep(1100); } };
+window.E3 = () => exS.classList.add('in');
+
+const RL = Stage('rule', { caption: ['Rule 1: the cuts can\'t matter', 'Same text, cut three ways'] });
+const cuts3 = [[SAMPLE], ['Use `x', '` then ``', '`py\nprint(1)\n``', '` done'], ['Us', 'e `x` then `', '``p', 'y\nprint(1)\n`', '`', '` done']];
+const beltR = cuts3.map((row, i) => { const b = block(RL, 'mini fade', 110, 260 + i * 110, row.map(c => `<div class="chunk">${tilesHtml(c)}</div>`).join('')); b.style.transform = 'scale(1.75)'; b.style.transformOrigin = 'left top'; return b; });
+const rlO = block(RL, 'screen fade', 110, 640, '<i>Every time</i>' + pills(FINAL), 1700);
+window.P4 = async () => { go(RL, 1); await sleep(3200); for (const b of beltR) { b.classList.add('in'); await sleep(1100); } await sleep(300); rlO.classList.add('in'); };
+
+const OP = Stage('optim', { caption: ['Rule 2: style it as soon as you can', 'Before the closing backtick arrives'] });
+const opS = block(OP, 'screen', 110, 300, '<i>On screen</i><span class="pill text" id="op0">Try </span><span class="pill inline" id="op1" style="display:none"></span><span class="pill text" id="op2" style="display:none"></span>', 1700);
+const opN = block(OP, 'bigline fade', 110, 520, 'The closing backtick hasn\'t arrived. <span style="color:var(--c-inline)">Show it as code anyway.</span>', 1700);
+const opN2 = block(OP, 'bigline fade', 110, 660, '<span class="sel">&nbsp;Selected text&nbsp;</span> stays selected, because the screen only <span style="color:var(--good)">grows at the end</span>.', 1700);
+const CODE_TXT = 'print("hello world")';
+let opStop = false;
+window.P5 = async () => {
+  go(OP, 1); await sleep(3400); const a = document.getElementById('op1'); a.style.display = 'inline-block';
+  for (const c of 'print("hello wor') { a.textContent += c; await sleep(170); }
+  opN.classList.add('in');
+};
+window.P6 = async () => {
+  OP.cap('Rule 3: never take back what\'s on screen', 'Events only add to the end');
+  const a = document.getElementById('op1'), o = document.getElementById('op0'); await sleep(1500); o.classList.add('sel'); o.style.background = '#b4d5fe';
+  for (const c of 'ld")') { a.textContent += c; await sleep(280); }
+  const b = document.getElementById('op2'); b.style.display = 'inline-block'; opN2.classList.add('in');
+  for (const c of ' to print a greeting') { b.textContent += c; await sleep(180); }
+};
+
+// ==================================================================== 2. why it's hard
+const WY = Stage('ways', { caption: ['Why not the obvious way?', ''] });
+const w1 = block(WY, 'way fade', 110, 230, '<h3>Wait for the end</h3><div class="scr" id="w1s"></div><div class="v">A blank screen until the end</div>', 820);
+const w2 = block(WY, 'way fade', 990, 230, '<h3>Re-parse and redraw it all</h3><div class="scr" id="w2s"></div><div class="v">Flicker, lost selection, growing work</div>', 820);
+window.B1 = async () => { go(WY, 2); await sleep(2000); w1.classList.add('in'); };
+window.B2 = async () => {
+  w2.classList.add('in'); await sleep(1500); const s = document.getElementById('w2s'); let txt = '';
+  for (let i = 0; i < 11; i++) { txt += 'Use x then print(1) '; s.style.opacity = 0; await sleep(130); s.textContent = txt; s.style.opacity = 1; await sleep(650); }
+};
+
+const NV = Stage('naive', { caption: ['Parse each chunk on its own?', 'That breaks too'] });
+const nvR = [['en `', 'One backtick: inline code?'], ['``py', 'Two backticks: nothing?']].map(([c, why], i) => {
+  block(NV, 'tileRow tiles', 180, 280 + i * 190, tilesHtml(c));
+  return block(NV, 'bigv fade', 680, 300 + i * 190, why, 1100);
+});
+const nv3 = block(NV, 'bigv fade', 180, 680, 'Really: three backticks, a code fence. <span style="color:var(--bad)">Neither chunk can see it.</span>', 1600);
+const nv4 = block(NV, 'bigv fade', 180, 800, '<span style="color:var(--acc)">One pass, one character at a time, remembering just enough between chunks.</span>', 1600);
+window.B3 = async () => { go(NV, 2); await sleep(3400); nvR[0].classList.add('in'); await sleep(3000); nvR[1].classList.add('in'); };
+window.B4 = async () => { nv3.classList.add('in'); await sleep(4800); nv4.classList.add('in'); };
+
+const QS = Stage('questions', { caption: ['Ask before you code', 'Each answer changes the code'] });
+const qr = [['The stream ends inside code?', 'It stays code. It\'s already on screen.'], ['Two backticks on their own?', 'Ordinary characters.'], ['One backtick inside a fence?', 'Ordinary code. Only <b>three in a row</b> close a fence.'], ['Language name? Fence mid-line?', 'Keep it simple first. Handle them as follow-ups.']]
+  .map(([q, a], i) => block(QS, 'qrow fade', 110, 240 + i * 180, `<b>${q}</b><span>${a}</span>`, 1740));
+window.C1 = async () => { go(QS, 2); await sleep(3000); qr[0].classList.add('in'); };
+window.C2 = () => qr[1].classList.add('in');
+window.C3 = () => qr[2].classList.add('in');
+window.C4 = () => qr[3].classList.add('in');
+
+// ==================================================================== 3. the plan
+const LT = Stage('light', { caption: ['A state machine', 'Exactly one state at a time. An input may move it to another'] });
+block(LT, 'lightbox', 500, 240, '<i class="r"></i><i class="a"></i><i class="g"></i>');
+const ltS = block(LT, 'bigstate', 860, 480, 'state = "green"', 900);
+const lts = LT.svg.parentNode.querySelectorAll('.lightbox i');
+window.L1 = async () => {
+  go(LT, 3);
+  const seq = [['g', 'green'], ['a', 'amber'], ['r', 'red']]; let n = 0;
+  for (let i = 0; i < 9; i++) { lts.forEach(l => l.classList.remove('on')); const [c, name] = seq[n % 3]; LT.svg.parentNode.querySelector('.lightbox i.' + c).classList.add('on'); ltS.textContent = `state = "${name}"`; n++; await sleep(1450); }
+};
+
+const SM = Stage('states', { caption: ['Our state machine', 'Three states'] });
+const sb = {}; [['text', 'TEXT', 810], ['inline', 'INLINE', 150], ['fence', 'FENCE', 1470]].forEach(([k, l, x]) => { sb[k] = block(SM, 'st-box ' + k, x, 400, l); });
+function arrow(x1, y1, x2, y2, lab, curve) {
+  const mx = (x1 + x2) / 2, my = (y1 + y2) / 2 + curve;
+  shape(SM.bg, 'path', { d: `M${x1},${y1} Q${mx},${my} ${x2},${y2}`, fill: 'none', stroke: '#b8bfcc', 'stroke-width': 5, 'marker-end': 'url(#ah)' });
+  shape(SM.bg, 'text', { x: mx, y: my + (curve < 0 ? -2 : 34), 'text-anchor': 'middle', 'font-size': 36, 'font-weight': 800, fill: '#bf8700', 'font-family': 'Consolas' }, lab);
+}
+const defs = shape(SM.svg, 'defs', {}); const mk = shape(defs, 'marker', { id: 'ah', markerWidth: 10, markerHeight: 10, refX: 8, refY: 4, orient: 'auto' }); shape(mk, 'path', { d: 'M0,0 L8,4 L0,8 z', fill: '#b8bfcc' });
+arrow(810, 440, 450, 440, '`', -46); arrow(450, 510, 810, 510, '`', 46); arrow(1110, 440, 1470, 440, '```', -46); arrow(1470, 510, 1110, 510, '```', 46);
+const smT = block(SM, 'screen', 110, 720, '<i>Every character belongs to the current state</i><span id="smP"></span>', 1700);
+window.L2 = async () => {
+  go(SM, 3); sb.text.classList.add('on'); await sleep(4200);
+  const seq = [['text', 'Use '], ['inline', 'x'], ['text', ' then '], ['fence', 'print(1)'], ['text', ' done']]; const sh = [];
+  for (const [k, t] of seq) { Object.values(sb).forEach(b => b.classList.remove('on')); sb[k].classList.add('on'); sh.push([k, t]); document.getElementById('smP').innerHTML = pills(sh); await sleep(1500); }
+};
+
+const HC = Stage('catch', { caption: ['Here\'s the catch', 'You read one backtick. What does it mean?'] });
+block(HC, 'tileRow tiles', 200, 250, tilesHtml('`'));
+const hq = block(HC, 'q fade', 310, 240, '?');
+const hrow = [['`x', 'A letter next: it opened inline code', 'var(--c-inline)'], ['```', 'Two more: it\'s a code fence', 'var(--c-fence)'], ['``x', 'One more, then a letter: two ordinary characters', 'var(--c-text)']].map(([s, m, c], i) => {
+  const a = block(HC, 'tileRow tiles fade', 200, 390 + i * 150, tilesHtml(s)); const b = block(HC, 'bigv fade', 480, 410 + i * 150, `<span style="color:${c}">${m}</span>`, 1300);
+  a.style.transform = 'scale(1.7)'; return [a, b];
+});
+const hSlots = block(HC, 'slots fade', 1000, 240, '<span style="font-size:40px;font-weight:800;color:var(--warn);align-self:center">Held:</span><span class="slot"></span><span class="slot"></span><span class="slot"></span>');
+const hSl = [...hSlots.querySelectorAll('.slot')];
+const hSay = block(HC, 'bigv fade', 200, 860, '', 1600);
+window.L3 = async () => { go(HC, 3); await sleep(2600); hq.classList.add('in'); await sleep(2200); for (const [a, b] of hrow) { a.classList.add('in'); b.classList.add('in'); await sleep(2400); } };
+window.L4 = async () => {
+  HC.cap('So don\'t decide yet', 'Hold it, and keep a count'); hSlots.classList.add('in'); hq.classList.remove('in'); await sleep(1500);
+  for (let i = 0; i < 3; i++) { hSl[i].classList.add('full'); hSl[i].textContent = '`'; await sleep(900); }
+  hSl.forEach(s => { s.classList.remove('full'); s.textContent = ''; }); hSl[0].classList.add('full'); hSl[0].textContent = '`'; hSay.innerHTML = '<span style="color:var(--warn)">Decide when a non-backtick arrives, or the count hits three.</span>'; hSay.classList.add('in');
+};
+const TW = Say('two', 'Between chunks, remember only two things: the state, and how many backticks are held.');
+document.querySelector('#two .kicker').textContent = 'The whole design';
+window.L5 = () => go(TW, 3);
+
+// ==================================================================== machine: the parser's memory, painted from the real trace
+function machine(d, extra = '') {
+  const r = block(d, 'mach ' + extra, 20, 58, `
+    <div class="ml" style="left:0;top:0">chunk<small class="mc"></small></div>
+    <div class="tiles m-t" style="left:0;top:38px"></div>
+    <div class="ml" style="left:0;top:128px">self.state</div>
+    <div class="m-s" style="left:0;top:166px"><span class="sb text">TEXT</span><span class="sb inline">INLINE</span><span class="sb fence">FENCE</span></div>
+    <div class="ml" style="left:0;top:262px">self.ticks</div>
+    <div class="slots m-h" style="left:0;top:300px"><span class="slot"></span><span class="slot"></span><span class="slot"></span></div>
+    <div class="ml" style="left:260px;top:262px">self.buf</div>
+    <div class="m-b" style="left:260px;top:300px"></div>
+    <div class="ml fadeL" style="left:0;top:388px">out <small>this call only</small></div>
+    <div class="m-o" style="left:0;top:426px"></div>
+    <div class="ml fadeL" style="left:0;top:610px">on screen</div>
+    <div class="m-sc" style="left:0;top:648px"></div>`, 920);
+  const $ = s => r.querySelector(s);
+  const E = { tiles: $('.m-t'), states: $('.m-s'), slots: $('.m-h'), buf: $('.m-b'), out: $('.m-o'), screen: $('.m-sc'), mc: $('.mc') };
+  const sbs = { text: $('.sb.text'), inline: $('.sb.inline'), fence: $('.sb.fence') };
+  let cur = null;
+  return {
+    E, sbs,
+    paint(s) {
+      if (cur !== s.chunk) { E.tiles.innerHTML = tilesHtml(s.chunk); cur = s.chunk; }
+      E.mc.textContent = s.total ? `${s.n + 1} of ${s.total}` : '';
+      [...E.tiles.children].forEach((t, i) => { t.classList.toggle('cur', i === s.i); t.classList.toggle('done', s.i === -1 ? true : s.i > i); });
+      Object.entries(sbs).forEach(([k, b]) => b.classList.toggle('on', k === s.state));
+      [...E.slots.children].forEach((e, i) => { const f = i < s.ticks; e.classList.toggle('full', f); e.textContent = f ? TK_ : ''; });
+      E.buf.innerHTML = tilesHtml(s.buf);
+      E.out.innerHTML = evs(s.out);
+      E.screen.innerHTML = pills(s.shown);
+    },
+  };
+}
+const BLANK = { chunk: CHUNKS[0], n: 0, total: 6, i: -2, state: 'text', ticks: 0, buf: '', out: [], shown: [] };
+async function play(sp, m, a, b, ms, trace = TR) { for (let i = a; i <= b; i++) { m.paint(trace[i]); await sleep(ms); } }
+let last = BLANK;
+
+// ==================================================================== 4. state
+const VR = Split('vars', { size: 27, lines: ['TEXT, INLINE, FENCE = "text", "inline", "fence"', 'TICK = "`"', '', 'class StreamParser:', '    def __init__(self):', '        self.state = TEXT', '        self.ticks = 0    # backticks held, not yet decided', '        self.buf = []     # characters waiting to go out'] });
+const VM = machine(VR.d, 'vars'); VM.paint({ ...BLANK, chunk: '' });
+window.N1 = () => { go(VR, 4); VR.step(5, { from: VM.E.states, note: '<code>self.state</code> is which box is lit. It starts as text.<br>Anything on <code>self</code> lives on the object, and survives between calls.' }); };
+window.N2 = async () => {
+  VM.paint({ ...BLANK, chunk: '', ticks: 2 }); VR.step(6, { from: VM.E.slots, note: '<code>self.ticks</code> is the number of held backticks: how many slots are full.' });
+  await sleep(2600); VM.paint({ ...BLANK, chunk: '' });
+};
+window.N3 = () => { VM.paint({ ...BLANK, chunk: '', buf: 'Use ' }); VR.step(7, { from: VM.E.buf, note: 'A <b>buffer</b> is a temporary holding area. It\'s a list, because adding to a list is cheap, and <code>"".join(list)</code> builds the string at the end.' }); };
+
+// ==================================================================== 5. feed
+const FD = Split('feedc', { size: 29, lines: ['def feed(self, chunk):', '    out = []', '    for ch in chunk:', '        if ch == TICK:', '            self._tick(out)', '        else:', '            self._settle(out)', '            self.buf.append(ch)', '    self._flush(out)', '    return out'] });
+const FM = machine(FD.d);
+window.F1 = () => { go(FD, 5); FM.paint(BLANK); FD.step(1, { from: FM.E.out, note: '<code>out</code> is the list of events this call returns. It\'s a local variable, so it disappears when the call ends.' }); };
+window.F2 = async () => {
+  FM.paint({ ...BLANK, i: 0 }); FD.step(2, { from: FM.E.tiles, note: 'One trip around the loop for each character. The first is <code>U</code>.' });
+  await sleep(3200); FD.step([3, 5], { note: 'It isn\'t a backtick, so we take the <code>else</code> branch.' });
+  await sleep(2600); FD.step(6, { from: FM.E.slots, note: '<code>_settle</code> deals with held backticks. There are none, so it does nothing.' });
+  await sleep(4400); FM.paint(TR[0]); FD.step(7, { from: FM.E.buf, note: 'The letter goes into the buffer.' });
+};
+window.F3 = async () => { FD.step(7, { from: FM.E.buf, note: 'The plain path: one trip around the loop, one tile in the buffer.' }); await sleep(900); await play(FD, FM, 1, 3, 1100); };
+
+// ==================================================================== 6. tick + settle
+const TK = Split('tickc', { size: 25, lines: ['def _tick(self, out):', '    if self.state == INLINE:', '        self._switch(TEXT, out)', '        return', '    self.ticks += 1', '    if self.ticks == 3:', '        self.ticks = 0', '        target = TEXT if self.state == FENCE else FENCE', '        self._switch(target, out)', '', 'def _settle(self, out):', '    if self.ticks == 1 and self.state == TEXT:', '        self.ticks = 0', '        self._switch(INLINE, out)', '    elif self.ticks:', '        self.buf.append(TICK * self.ticks)', '        self.ticks = 0'] });
+const TM = machine(TK.d);
+const SW = Split('swc', { size: 28, lines: ['def _switch(self, state, out):', '    self._flush(out)', '    self.state = state', '', 'def _flush(self, out):', '    if self.buf:', '        out.append((self.state, "".join(self.buf)))', '        self.buf = []'] });
+const SM2 = machine(SW.d);
+const curOn = (s, i) => ({ ...s, i });
+window.K1 = async () => {
+  go(TK, 6); TM.paint(curOn(TR[3], 4)); TK.step(0, { from: TM.E.tiles, note: 'A backtick, so <code>feed</code> calls <code>_tick</code>.' });
+  await sleep(2400); TK.step(1, { note: 'The state isn\'t inline, so we skip that branch.' });
+  await sleep(2400); TM.paint(TR[4]); TK.step(4, { from: TM.E.slots, note: 'The count goes up to one.' });
+  await sleep(2000); TK.step(5, { note: 'It isn\'t three, so we\'re done. <b>Nothing was decided.</b> The backtick went into a slot, not the buffer.' });
+};
+window.K2 = async () => {
+  TM.paint(curOn(TR[4], 5)); TK.step(10, { from: TM.E.tiles, note: '<code>x</code> isn\'t a backtick, so <code>_settle</code> runs first. <b>This is where the decision happens.</b>' });
+  await sleep(4800); TK.step(11, { from: TM.E.slots, note: 'One held, and we\'re in text. So that backtick opened inline code.' });
+  await sleep(4400); TM.paint({ ...curOn(TR[4], 5), ticks: 0 }); TK.step([12, 13], { note: 'Reset the count, and switch.' });
+};
+window.K3 = async () => {
+  go(SW, 6); const s0 = { ...curOn(TR[4], 5), ticks: 0 }, s1 = { ...s0, buf: '', out: [['text', 'Use ']], shown: [['text', 'Use ']] };
+  SM2.paint(s0); SW.step(1, { from: SM2.E.buf, note: 'Flush <b>first</b>, because the characters in the buffer belong to the <b>old</b> state.' });
+  await sleep(5400); SW.step(6, { from: SM2.E.buf, note: '<code>"".join</code> makes one string. Add an event with the current state, still <code>text</code>. The double parentheses make one pair.' });
+  await sleep(2400); SM2.paint({ ...s0, buf: '', out: [['text', 'Use ']] }); await sleep(1000); SW.step(7, { from: SM2.E.out }); SM2.paint(s1);
+  await sleep(2400); SW.step(2, { from: SM2.E.states, note: 'Only now does the state change.' }); SM2.paint({ ...s1, state: 'inline' });
+};
+window.K4 = async () => {
+  go(FD, 6); FM.paint(TR[5]); FD.step(7, { from: FM.E.buf, note: 'Back in <code>feed</code>, <code>x</code> goes into the buffer, now in the inline state.' });
+  await sleep(4400); go(TK, 6); TM.paint(curOn(TR[5], 6)); TK.step([1, 2, 3], { from: TM.E.tiles, note: '<b>In inline, one backtick always closes it.</b> Switch back to text.' });
+  await sleep(4600); TM.paint(TR[6]); TK.step(2, { from: TM.E.out, note: 'The switch flushes <code>x</code> as inline code.' });
+};
+window.K5 = async () => {
+  go(FD, 6); FM.paint(TR[6]); FD.step(7, { from: FM.E.buf, note: 'The space, <code>t</code> and <code>h</code> go into the buffer.' });
+  await sleep(600); await play(FD, FM, 7, 9, 800);
+  FD.step(8, { from: FM.E.out, note: 'The chunk ran out. Flush what\'s left, so the reader sees it now, not later.' }); await sleep(700); FM.paint(TR[10]);
+  await sleep(4000); FD.step(9, { from: FM.E.screen, note: '<b>One chunk, three events, two changes of state.</b> A chunk can hold any number of them.' });
+};
+window.K6 = async () => {
+  go(FD, 6); const a = idx(1, 0); FM.paint(TR[a]); FD.step(7, { from: FM.E.tiles, note: 'The second chunk, the tricky one: <code>e</code>, <code>n</code>, and a space.' });
+  await sleep(500); await play(FD, FM, a, a + 2, 600);
+  FM.paint(TR[a + 3]); FD.step(4, { from: FM.E.slots, note: 'A backtick: the count goes to one. Then the chunk ends.' }); await sleep(4000);
+  FM.paint(TR[a + 4]); FD.step([8, 9], { from: FM.E.out, note: 'Flush and return. <code>out</code> is gone.' }); await sleep(3400);
+  go(FD, 6); FD.step(4, { from: FM.E.slots, note: 'But <code>self.ticks</code> lives on the object, so <b>it survives until the next call.</b> That\'s how we remember across a cut.' });
+};
+window.K7 = async () => {
+  go(TK, 6); const a = idx(2, 0); TM.paint(TR[a - 1]); TK.step(4, { from: TM.E.tiles, note: 'The third chunk: two more backticks.' });
+  await sleep(1600); TM.paint(TR[a]); TK.step(4, { from: TM.E.slots, note: 'One makes two.' });
+  await sleep(1900); TK.step([5, 6], { from: TM.E.slots, note: 'The next makes three, so this branch fires. Reset the count.' }); TM.paint({ ...TR[a], i: 1, ticks: 3 });
+  await sleep(3600); TM.paint({ ...TR[a + 1], state: 'text' }); TK.step(7, { note: '<code>A if test else B</code> is Python\'s one-line if. In a fence, go to text. Otherwise, go to fence.' });
+  await sleep(6400); TM.paint(TR[a + 1]); TK.step(8, { from: TM.E.states, note: '<b>The same line opens and closes.</b>' });
+};
+window.K8 = async () => {
+  go(FD, 6); const a = idx(2, 2); FD.step(7, { from: FM.E.buf, note: 'Now we\'re in the fence. Characters go through the same buffer.' });
+  await play(FD, FM, a, a + 4, 620); FM.paint(TR[a + 5]); FD.step(8, { from: FM.E.out, note: 'Same flush, and the current state labels them <code>fence</code>.' });
+  await sleep(1800); const b = idx(3, 0); await play(FD, FM, b, b + 7, 220); FM.paint(TR[b + 8]); FD.step(4, { from: FM.E.slots, note: 'The next chunk does the same, and ends with one backtick held, again.' });
+};
+window.K9 = async () => {
+  go(TK, 6); const a = idx(4, 0); TM.paint(TR[a]); TK.step(4, { from: TM.E.tiles, note: 'The fifth chunk is only two backticks.' });
+  await sleep(2400); TM.paint(TR[a + 1]); TK.step([5, 6, 7, 8], { from: TM.E.states, note: 'That makes three, so the fence closes.' });
+  await sleep(3000); TM.paint(TR[a + 2]); TK.step(8, { from: TM.E.out, note: 'The buffer is empty, so flush adds nothing. <code>feed</code> returns <code>[]</code>.' });
+  await sleep(3800); go(FD, 6); const b = idx(5, 0); await play(FD, FM, b, b + 5, 340); FD.step(9, { from: FM.E.screen, note: '<b>Exactly what we wanted</b>, however it was cut.' });
+};
+window.K10 = async () => {
+  go(TK, 6); TM.paint(TR2[0]); TK.step(14, { from: TM.E.tiles, note: 'A new example: <code>a</code>, two backticks, then <code>b</code>.' });
+  await sleep(1300); await play(TK, TM, 1, 2, 900); TM.paint(curOn(TR2[2], 3));
+  await sleep(2200); TK.step([14, 15, 16], { from: TM.E.slots, note: 'Two held. Two means nothing, so they go back as <b>ordinary characters</b>, ahead of <code>b</code>.' });
+  await sleep(3400); TM.paint(TR2[3]); await sleep(4000); TK.note('The same branch handles a lone backtick inside a fence. It\'s just code.');
+};
+const FN = Split('finc', { size: 29, lines: ['def finish(self):', '    out = []', '    if self.ticks:', '        out.append((self.state, TICK * self.ticks))', '        self.ticks = 0', '    return out'] });
+const NM = machine(FN.d);
+window.K11 = async () => {
+  go(FN, 6); const s = TR3[TR3.length - 1]; NM.paint(s); FN.step(2, { from: NM.E.slots, note: 'The stream ended with two backticks held. Nothing will ever come along to settle them.' });
+  await sleep(6200); NM.paint({ ...s, ticks: 0, out: [['text', '``']], shown: [['text', 'a``']] }); FN.step([3, 4], { from: NM.E.out, note: '<code>TICK * 2</code> is two backticks. Send them as ordinary characters, in the current state.' });
+};
+window.K12 = () => { const s = TR4[TR4.length - 1]; NM.paint(s); FN.step(5, { from: NM.E.screen, note: 'A fence that never closed: nothing is held, so finish returns <code>[]</code>. Its code is <b>already on screen</b>.' }); };
+
+// ==================================================================== 7. tests
+const TS = Split('tests', { size: 26, lines: ['def run(chunks):', '    p = StreamParser()', '    events = []', '    for c in chunks:', '        events += p.feed(c)', '    return merged(events + p.finish())', '', 'for s in NASTY:', '    for _ in range(300):', '        assert run(random_cuts(s)) == run([s])'] });
+const tRows = [0, 1, 2, 3].map(i => block(TS.d, 'mini', 30, 100 + i * 66, ''));
+block(TS.d, 'screen', 30, 380, '<i>Every time</i>' + pills(FINAL).replaceAll('class="pill', 'style="font-size:27px" class="pill'), 900);
+const nasty = block(TS.d, 'panel2', 30, 640, '<h4>NASTY</h4><div class="nasty">' + ['a`', 'a``', 'a``b', '```py', '````', '`a``b`', '```a`b```'].map(s => `<span>${s}</span>`).join('') + '</div>', 900);
+let tsStop = false;
+function randCut() { const n = 3 + Math.floor(Math.random() * 3), c = new Set(); while (c.size < n) c.add(1 + Math.floor(Math.random() * (SAMPLE.length - 2))); const s = [0, ...[...c].sort((a, b) => a - b), SAMPLE.length], r = []; for (let i = 0; i + 1 < s.length; i++) r.push(SAMPLE.slice(s[i], s[i + 1])); return r; }
+window.Q1 = async () => {
+  go(TS, 7); tRows.forEach(r => { r.innerHTML = randCut().map(c => `<div class="chunk">${tilesHtml(c)}</div>`).join(''); }); TS.step([8, 9], { from: tRows[0], note: 'Cut the text at random. The result must match no cuts at all. <code>merged</code> glues neighbors of the same kind together, since cuts change the sizes of the pieces.' });
+  while (!tsStop) { tRows.forEach(r => { r.innerHTML = randCut().map(c => `<div class="chunk">${tilesHtml(c)}</div>`).join(''); }); await sleep(450); }
+};
+window.Q2 = async () => { TS.step(7, { from: nasty, note: 'Strings built to break it.' }); await sleep(1200); for (const e of nasty.querySelectorAll('span')) { e.classList.add('in'); await sleep(1100); } tsStop = true; };
+const HR = Stage('hour', { caption: ['How it fits in the hour', 'The order you\'d type it'] });
+const seg = [['Clarify', 5, '#5f6368'], ['State, feed: plain text', 10, '#2456c7'], ['tick, settle: inline', 10, '#1a7f37'], ['Fences', 10, '#1a7f37'], ['finish', 5, '#1a7f37'], ['Random cut test', 10, '#bf8700'], ['Follow-ups', 10, '#8250df']];
+const tl = block(HR, 'tlbar', 110, 340, seg.map(([n, m, c]) => `<div style="flex:${m};background:${c}">${n}<small>${m} min</small></div>`).join(''), 1700);
+const hrN = block(HR, 'bigline fade', 110, 640, 'Run a test after each step, so a bug can only be in what you just wrote.', 1700);
+window.Q3 = async () => { go(HR, 7); for (const c of tl.children) { await sleep(1900); c.classList.add('in'); } hrN.classList.add('in'); };
+
+// ==================================================================== 8. follow-ups
+const FU = Stage('fu', { caption: ['Expect follow-ups', ''] });
+const fus = [
+  ['Pull out the language name', '<div class="frow"><span class="chp">TEXT</span>→<span class="chp in2">FENCE_INFO</span>→<span class="chp fen">FENCE</span></div><div class="frow"><span class="tiles">' + tilesHtml('```py\n') + '</span></div>', 'A fourth state, up to the newline.'],
+  ['Fence only at line start', '<div class="frow"><span class="tiles">' + tilesHtml('\n```') + '</span><span style="color:var(--good)">a fence</span></div><div class="frow"><span class="tiles">' + tilesHtml('x```') + '</span><span style="color:var(--muted)">ordinary characters</span></div>', 'Remember if the last character was a newline.'],
+  ['Other marks, like bold', '<div class="frow"><span class="tiles">' + tilesHtml('*a') + '</span><span>one star: italics</span></div><div class="frow"><span class="tiles">' + tilesHtml('**') + '</span><span>two stars: bold</span></div>', 'The same trick: hold it until you can tell.'],
+  ['On the screen', '<div class="frow"><span class="pill text">Use </span><span class="pill inline">x</span><span class="pill text"> th</span><span class="pill text" style="background:#e6f4ea;color:var(--good)">en</span> ← new</div>', 'Add to the last block, or open a new one. Old text is never touched.'],
+].map(([t, pic, w], i) => block(FU, 'fucard fade', 110 + (i % 2) * 870, 210 + Math.floor(i / 2) * 420, `<h3>${t}</h3>${pic}<div class="why">${w}</div>`, 830));
+window.U1 = () => { go(FU, 8); fus[0].classList.add('in'); };
+window.U2 = () => fus[1].classList.add('in');
+window.U3 = () => fus[2].classList.add('in');
+window.U4 = () => fus[3].classList.add('in');
+
+// ==================================================================== 9. the full solution
+const FC = document.createElement('section'); FC.id = 'fullcode'; FC.className = 'scene'; document.body.append(FC);
+const makeCol = (lines, x) => { const b = document.createElement('div'); b.className = 'fullc'; b.style.left = x + 'px'; FC.append(b);
+  return { b, lines, L: lines.map(t => { const e = document.createElement('div'); e.className = 'ln'; e.innerHTML = py(t) || ' '; b.append(e); return e; }) }; };
+const COLS = [makeCol(FULL.left, 12), makeCol(FULL.right, 966)];
+function lit(starts) {
+  COLS.forEach(c => { c.L.forEach(l => l.classList.remove('lit')); c.b.classList.add('focus'); });
+  for (const st of starts) for (const c of COLS) {
+    const i = c.lines.findIndex(l => l.startsWith(st)); if (i < 0) continue;
+    const ind = st.length - st.trimStart().length; c.L[i].classList.add('lit');
+    for (let j = i + 1; j < c.lines.length; j++) { const t = c.lines[j]; if (t.trim() && t.length - t.trimStart().length <= ind) break; if (t.trim()) c.L[j].classList.add('lit'); }
+  }
+}
+window.S1 = () => { clearLinks(); show('fullcode'); CH.set(9); COLS.forEach(c => c.b.classList.remove('focus')); };
+window.S2 = () => lit(['    def __init__']);
+window.S3 = () => lit(['    def feed']);
+window.S4 = () => lit(['    def _tick']);
+window.S5 = () => lit(['    def _settle']);
+window.S6 = () => lit(['    def _switch', '    def _flush']);
+window.S7 = () => lit(['    def finish']);
+
+const CS = Stage('costs', { caption: ['What it costs', ''] });
+const csr = [['Time', 'One step per character: <b>O(n)</b>'], ['Held between chunks', 'The state, and <b>at most 2 backticks</b>']].map(([a, b], i) => block(CS, 'cost fade', 110, 340 + i * 220, `<span style="font-weight:800">${a}</span><span>${b}</span>`, 1700));
+window.S8 = async () => { go(CS, 9); await sleep(800); csr[0].classList.add('in'); await sleep(2200); csr[1].classList.add('in'); };
+
+const RC = Stage('recap', { caption: ['', ''] });
+const rr = [['The lit box', 'self.state'], ['The filled slots', 'self.ticks'], ['Tiles waiting to go out', 'self.buf'], ['Tiles leaving as one piece', 'self._flush(out)'], ['A box lighting up', 'self._switch(state, out)']]
+  .map(([a, b], i) => block(RC, 'rrow fade', 110, 110 + i * 180, `<span>${a}</span><span class="arr">→</span><span><code>${esc(b)}</code></span>`, 1710));
+window.R1 = async () => { go(RC, 9); await sleep(2200); rr[0].classList.add('in'); await sleep(1600); rr[1].classList.add('in'); };
+window.R2 = async () => { rr[2].classList.add('in'); await sleep(2200); rr[3].classList.add('in'); };
+window.R3 = () => rr[4].classList.add('in');
+
+const Z = Say('say', 'Only two things cross a chunk: the state, and the held backticks.');
+document.querySelector('#say .kicker').textContent = 'The one line to remember';
+window.Z1 = () => go(Z, 9);
+</script>
+</body>
+</html>

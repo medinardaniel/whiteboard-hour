@@ -9,3 +9,5 @@ videos/lecture/*/f*.png
 videos/lecture/*/c*-lecture.*
 videos/lecture/*/cues_build/
 videos/lecture/*/raw_build/
+videos/lecture/*/w*-lecture.*
+videos/lecture/*/storyboard.png
