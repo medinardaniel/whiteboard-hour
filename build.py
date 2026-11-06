@@ -438,7 +438,7 @@ def build_print():
         f'<section class="cover"><h1>{SITE}</h1><p>System design for a small business with a big traffic spike.</p>'
         '<ol><li><a href="#part-index">Framework</a>: the six phases in 60 minutes</li>'
         '<li><a href="#part-components">Components</a>: the 23 parts you need, drawn</li>'
-        '<li><a href="#part-questions">Sample questions</a>: 8 prompts with worked answers, then 20 follow-up drills</li>'
+        '<li><a href="#part-questions">Sample questions</a>: 9 prompts with worked answers, then 20 follow-up drills</li>'
         '<li><a href="#part-coding">Coding questions</a>: 8 pairing problems in stages with answer keys, plus 3 with video walkthroughs</li></ol></section>'
     )
     css = (ROOT / "style.css").read_text(encoding="utf-8")
