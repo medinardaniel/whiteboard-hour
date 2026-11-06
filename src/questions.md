@@ -108,7 +108,7 @@ At 10 writes/s and a few MB of data, **this fits on one database** with lots of 
 
 ### 5. Go-live checklist
 
-1. **Load test at 3x:** 60,000 visitors in 30 min, against staging, Stripe in test mode. Pass: 0 oversold slots, 0 double charges, p95 under 500 ms.
+1. **Load test at 3x:** 60,000 visitors in 30 min, against staging, with Stripe mocked using latencies sampled from live calls. Stripe's sandbox limits are lower than live, so a test against it would measure those limits, not our system. Pass: 0 oversold slots, 0 double charges, p95 under 500 ms.
 2. **Pre-scale at 2:00 Sunday:** more API instances, a bigger DB tier, a warm CDN. Autoscaling takes minutes; this surge takes seconds.
 3. **Kill switches, each tested:** pause orders, close a slot (an oven breaks), waiting room on, hide photos.
 4. **Code freeze Friday.** Before that, canary releases with a rollback we've actually run. No deploys during the game.
